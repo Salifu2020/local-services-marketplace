@@ -1,0 +1,942 @@
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { auth, db, appId } from './firebase';
+import { signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
+import { ToastProvider } from './context/ToastContext';
+import { LoadingProvider } from './context/LoadingContext';
+import ProOnboarding from './ProOnboarding';
+import ProfessionalDetails from './pages/ProfessionalDetails';
+import BookingPage from './pages/BookingPage';
+import ProDashboard from './pages/ProDashboard';
+import ChatPage from './pages/ChatPage';
+import MyMessages from './pages/MyMessages';
+import MyBookings from './pages/MyBookings';
+import MyFavorites from './pages/MyFavorites';
+import AdminDashboard from './pages/AdminDashboard';
+import NotificationBell from './components/NotificationBell';
+import Logo from './components/Logo';
+// import SentryTestButton from './components/SentryTestButton'; // Uncomment to test Sentry
+import { useFavorites } from './hooks/useFavorites';
+import { mockGeocode as mockGeocodeUtil } from './utils/geocoding';
+import { setSentryUser } from './sentry';
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Calculate the distance between two geographical points using the Haversine formula.
+ * Returns the distance in kilometers (km).
+ * 
+ * @param {number} lat1 - Latitude of the first point
+ * @param {number} lon1 - Longitude of the first point
+ * @param {number} lat2 - Latitude of the second point
+ * @param {number} lon2 - Longitude of the second point
+ * @returns {number} Distance in kilometers
+ */
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  // Radius of Earth in kilometers
+  const R = 6371;
+
+  // Convert latitude and longitude from degrees to radians
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+
+  // Haversine formula
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  // Distance in kilometers
+  const distance = R * c;
+
+  return distance;
+}
+
+/**
+ * Helper function to convert degrees to radians
+ * @param {number} degrees - Angle in degrees
+ * @returns {number} Angle in radians
+ */
+function toRadians(degrees) {
+  return degrees * (Math.PI / 180);
+}
+
+// Export utilities for use in other components if needed
+export { haversineDistance };
+export { mockGeocodeUtil as mockGeocode };
+
+// Navigation component
+function Navigation() {
+  const location = useLocation();
+  const isOnboarding = location.pathname === '/pro-onboarding';
+  const { favorites } = useFavorites();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  if (isOnboarding) {
+    return null; // Don't show nav on onboarding page
+  }
+
+  return (
+    <nav className="bg-amber-800 shadow-sm border-b border-amber-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
+          <div className="flex items-center">
+            <Logo link={true} size="md" className="text-white" />
+          </div>
+
+          {/* Desktop Navigation */}
+          <div className="hidden lg:flex items-center space-x-4">
+            <Link
+              to="/"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+            >
+              Find a Pro
+            </Link>
+            <Link
+              to="/my-bookings"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+            >
+              My Bookings
+            </Link>
+            <Link
+              to="/my-messages"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+            >
+              My Messages
+            </Link>
+            <Link
+              to="/my-favorites"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors relative"
+            >
+              My Favorites
+              {favorites.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {favorites.length > 99 ? '99+' : favorites.length}
+                </span>
+              )}
+            </Link>
+            <Link
+              to="/pro-dashboard"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+            >
+              Pro Dashboard
+            </Link>
+            <NotificationBell />
+            <Link
+              to="/pro-onboarding"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              Become a Pro
+            </Link>
+          </div>
+
+          {/* Mobile: Notification Bell + Hamburger */}
+          <div className="flex lg:hidden items-center space-x-2">
+            <NotificationBell />
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 text-white hover:bg-amber-900 rounded-md transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Menu Dropdown */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-amber-900">
+            <div className="px-2 pt-2 pb-3 space-y-1">
+              <Link
+                to="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                Find a Pro
+              </Link>
+              <Link
+                to="/my-bookings"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                My Bookings
+              </Link>
+              <Link
+                to="/my-messages"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                My Messages
+              </Link>
+              <Link
+                to="/my-favorites"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                <span className="flex items-center justify-between">
+                  My Favorites
+                  {favorites.length > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                      {favorites.length > 99 ? '99+' : favorites.length}
+                    </span>
+                  )}
+                </span>
+              </Link>
+              <Link
+                to="/pro-dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                Pro Dashboard
+              </Link>
+              <Link
+                to="/pro-onboarding"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
+              >
+                Become a Pro
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+// Star Rating Component (Reusable)
+function StarRating({ rating, interactive = false, size = 'md' }) {
+  const sizeClasses = {
+    sm: 'text-sm',
+    md: 'text-base',
+    lg: 'text-lg',
+    xl: 'text-xl',
+  };
+
+  return (
+    <div className={`flex items-center gap-0.5 ${sizeClasses[size]}`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <span
+          key={star}
+          className={`${
+            star <= rating
+              ? 'text-yellow-400'
+              : 'text-gray-300'
+          }`}
+        >
+          ★
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Professional Card Component
+function ProfessionalCard({ professional, userId, distance, averageRating = null, reviewCount = 0 }) {
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const isFav = isFavorite(userId);
+
+  const handleFavoriteClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavorite(userId);
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 relative">
+      {/* Heart Icon */}
+      <button
+        onClick={handleFavoriteClick}
+        className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
+        aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        <svg
+          className={`w-6 h-6 transition-colors ${
+            isFav ? 'text-red-500 fill-current' : 'text-gray-400'
+          }`}
+          fill={isFav ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+          />
+        </svg>
+      </button>
+
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1 pr-12">
+          <h3 className="text-xl font-semibold text-gray-900 mb-1">
+            {professional.serviceType || 'Professional'}
+          </h3>
+          <p className="text-sm text-gray-500 mb-2">
+            Service Provider
+          </p>
+        </div>
+      </div>
+      
+      {/* Average Rating - Prominently Displayed */}
+      {averageRating !== null && averageRating > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <StarRating rating={Math.round(averageRating)} size="md" />
+          <span className="text-lg font-bold text-gray-900">
+            {averageRating.toFixed(1)}
+          </span>
+          {reviewCount > 0 && (
+            <span className="text-sm text-gray-500">
+              ({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})
+            </span>
+          )}
+        </div>
+      )}
+      
+      {professional.hourlyRate && (
+        <div className="mb-3">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <p className="text-2xl font-bold text-blue-600">
+              ${professional.hourlyRate.toFixed(2)}
+              <span className="text-sm font-normal text-gray-600">/hr</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Distance Away - Clearly Displayed */}
+      {distance !== null && distance !== undefined && (
+        <div className="mb-3">
+          <p className="text-sm font-medium text-gray-700 flex items-center">
+            <span className="mr-1">📍</span>
+            <span className="font-semibold">{distance.toFixed(1)} km away</span>
+          </p>
+        </div>
+      )}
+      
+      {professional.location && (
+        <div className="mb-3">
+          <p className="text-sm text-gray-600 flex items-center">
+            <span className="mr-1">📍</span>
+            {professional.location}
+          </p>
+        </div>
+      )}
+      
+      {professional.bio && (
+        <p className="text-sm text-gray-700 line-clamp-2 mb-4">
+          {professional.bio}
+        </p>
+      )}
+      
+      <Link
+        to={`/pro-details/${userId}`}
+        className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium text-center"
+      >
+        View Profile
+      </Link>
+    </div>
+  );
+}
+
+// Home page component
+function HomePage({ user, searchQuery, setSearchQuery }) {
+  const [professionals, setProfessionals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [locationInput, setLocationInput] = useState('');
+  const [customerLocation, setCustomerLocation] = useState({ lat: 30.2672, lon: -97.7431 }); // Default: Austin
+  const [geocoding, setGeocoding] = useState(false);
+  const [maxDistance, setMaxDistance] = useState('all'); // 'all', '5', '10', '25'
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Construct the Firestore collection path
+    const professionalsRef = collection(
+      db,
+      'artifacts',
+      appId,
+      'public',
+      'data',
+      'professionals'
+    );
+
+    // Set up real-time listener with onSnapshot
+    const unsubscribe = onSnapshot(
+      professionalsRef,
+      (snapshot) => {
+        setLoading(false);
+        setError(null);
+
+        const professionalsList = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          professionalsList.push({
+            id: doc.id,
+            userId: doc.id, // The document ID is the userId
+            ...data,
+          });
+        });
+
+        setProfessionals(professionalsList);
+      },
+      (err) => {
+        console.error('onSnapshot error:', err);
+        setError(`Error loading professionals: ${err.message}`);
+        setLoading(false);
+      }
+    );
+
+    // Cleanup listener on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, [user]);
+
+  // Client-side filtering logic
+  const filteredProfessionals = professionals.filter((pro) => {
+    if (!searchQuery.trim()) {
+      return true; // Show all if no search query
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    const serviceType = (pro.serviceType || '').toLowerCase();
+    const bio = (pro.bio || '').toLowerCase();
+    const location = (pro.location || '').toLowerCase();
+
+    // Match against service type, bio, or location
+    return (
+      serviceType.includes(query) ||
+      bio.includes(query) ||
+      location.includes(query)
+    );
+  });
+
+  // State for professional ratings
+  const [professionalRatings, setProfessionalRatings] = useState({});
+
+  // Fetch average ratings for all professionals
+  useEffect(() => {
+    if (filteredProfessionals.length === 0) {
+      setProfessionalRatings({});
+      return;
+    }
+
+    const fetchRatings = async () => {
+      const ratingsMap = {};
+
+      // Fetch ratings for each professional in parallel
+      const ratingPromises = filteredProfessionals.map(async (pro) => {
+        try {
+          const reviewsRef = collection(
+            db,
+            'artifacts',
+            appId,
+            'public',
+            'data',
+            'professionals',
+            pro.id,
+            'reviews'
+          );
+
+          const reviewsSnapshot = await getDocs(reviewsRef);
+          
+          if (reviewsSnapshot.empty) {
+            ratingsMap[pro.id] = { averageRating: null, reviewCount: 0 };
+            return;
+          }
+
+          let totalRating = 0;
+          let count = 0;
+
+          reviewsSnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.rating) {
+              totalRating += data.rating;
+              count++;
+            }
+          });
+
+          const averageRating = count > 0 ? totalRating / count : null;
+          ratingsMap[pro.id] = { averageRating, reviewCount: count };
+        } catch (err) {
+          console.error(`Error fetching ratings for ${pro.id}:`, err);
+          ratingsMap[pro.id] = { averageRating: null, reviewCount: 0 };
+        }
+      });
+
+      await Promise.all(ratingPromises);
+      setProfessionalRatings(ratingsMap);
+    };
+
+    fetchRatings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredProfessionals.length]); // Refetch when filtered list changes
+
+  // Calculate distance for each professional and add to the object
+  const professionalsWithDistance = filteredProfessionals.map((pro) => {
+    let distance = null;
+    
+    // Only calculate distance if both customer and professional have coordinates
+    if (customerLocation && customerLocation.lat && customerLocation.lon && 
+        pro.lat && pro.lon) {
+      distance = haversineDistance(
+        customerLocation.lat,
+        customerLocation.lon,
+        pro.lat,
+        pro.lon
+      );
+    }
+    
+    const ratings = professionalRatings[pro.id] || { averageRating: null, reviewCount: 0 };
+    
+    return {
+      ...pro,
+      distance,
+      averageRating: ratings.averageRating,
+      reviewCount: ratings.reviewCount,
+    };
+  });
+
+  // Filter by max distance
+  const distanceFilteredProfessionals = professionalsWithDistance.filter((pro) => {
+    // If maxDistance is 'all', show all professionals
+    if (maxDistance === 'all') {
+      return true;
+    }
+    
+    // If professional has no distance calculated, exclude them when a max distance is set
+    if (pro.distance === null || pro.distance === undefined) {
+      return false;
+    }
+    
+    // Filter by max distance
+    const maxDistanceValue = parseFloat(maxDistance);
+    return pro.distance <= maxDistanceValue;
+  });
+
+  // Sort by distance (closest first), then by those without coordinates
+  const sortedProfessionals = [...distanceFilteredProfessionals].sort((a, b) => {
+    // If both have distances, sort by distance
+    if (a.distance !== null && b.distance !== null) {
+      return a.distance - b.distance;
+    }
+    // If only one has distance, prioritize it
+    if (a.distance !== null && b.distance === null) {
+      return -1;
+    }
+    if (a.distance === null && b.distance !== null) {
+      return 1;
+    }
+    // If neither has distance, maintain original order
+    return 0;
+  });
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    // Search is handled by the filter, no need for separate action
+  };
+
+  const handleLocationSearch = async (e) => {
+    e.preventDefault();
+    
+    if (!locationInput.trim()) {
+      return;
+    }
+
+    setGeocoding(true);
+    try {
+        const coordinates = await mockGeocodeUtil(locationInput);
+        setCustomerLocation(coordinates);
+    } catch (err) {
+      console.error('Geocoding error:', err);
+      setError('Failed to geocode location. Please try again.');
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  return (
+    <>
+      <Navigation />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* User ID Display - Prominently displayed */}
+        <div className="mb-6 bg-blue-800 border border-blue-700 rounded-lg p-4">
+          <p className="text-sm text-blue-100 mb-1">Current User ID:</p>
+          <p className="text-lg font-mono font-semibold text-white break-all">
+            {user.uid}
+          </p>
+        </div>
+
+        {/* Sentry Test Button - Uncomment to test Sentry error tracking */}
+        {/* <div className="mb-6 flex justify-center">
+          <SentryTestButton />
+        </div> */}
+
+        {/* Landing Page with Centered Search Bar */}
+        <div className="mb-8">
+          <div className="w-full max-w-2xl mx-auto">
+            <div className="text-center mb-4">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white">
+                Find Your Perfect Service Provider
+              </h2>
+            </div>
+            <p className="text-blue-100 text-center mb-8">
+              Search for professionals in your area
+            </p>
+            
+            {/* Search Form with Service Type and Location */}
+            <div className="space-y-4">
+              {/* Service Type Search Bar */}
+              <form onSubmit={handleSearch} className="w-full">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search for services (e.g., 'Plumber', 'Electrician') or keywords in bio..."
+                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white px-3 sm:px-6 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium text-sm sm:text-base"
+                  >
+                    Search
+                  </button>
+                </div>
+              </form>
+
+              {/* Location Input */}
+              <form onSubmit={handleLocationSearch} className="w-full">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={locationInput}
+                    onChange={(e) => setLocationInput(e.target.value)}
+                    placeholder="Your Location (e.g., 'Miami, FL' or 'Austin, TX')..."
+                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm transition-all"
+                  />
+                  {geocoding && (
+                    <div className="absolute right-20 top-1/2 transform -translate-y-1/2">
+                      <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+                    </div>
+                  )}
+                  {locationInput && !geocoding && (
+                    <button
+                      type="button"
+                      onClick={() => setLocationInput('')}
+                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={geocoding || !locationInput.trim()}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-green-600 text-white px-3 sm:px-6 py-2 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                  >
+                    {geocoding ? 'Searching...' : 'Search'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Max Distance Filter */}
+              <div className="w-full">
+                <label htmlFor="maxDistance" className="block text-sm font-medium text-white mb-2">
+                  Max Distance
+                </label>
+                <select
+                  id="maxDistance"
+                  value={maxDistance}
+                  onChange={(e) => setMaxDistance(e.target.value)}
+                  className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm transition-all bg-white"
+                >
+                  <option value="all">All</option>
+                  <option value="5">5 km</option>
+                  <option value="10">10 km</option>
+                  <option value="25">25 km</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-4"></div>
+              <p className="text-white">Loading professionals...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">⚠️</span>
+              <div className="flex-1">
+                <p className="font-medium text-red-800 mb-1">Error Loading Professionals</p>
+                <p className="text-sm text-red-700">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                >
+                  Reload Page
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Search Results */}
+        {!loading && !error && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-white">
+                {searchQuery || locationInput || maxDistance !== 'all' ? (
+                  <>
+                    {sortedProfessionals.length} {sortedProfessionals.length === 1 ? 'Professional' : 'Professionals'} Found
+                    {searchQuery && (
+                      <span className="text-blue-200 font-normal ml-2">
+                        for "{searchQuery}"
+                      </span>
+                    )}
+                    {maxDistance !== 'all' && (
+                      <span className="text-blue-200 font-normal ml-2">
+                        within {maxDistance} km
+                      </span>
+                    )}
+                    {customerLocation && locationInput && (
+                      <span className="text-blue-200 font-normal ml-2 text-sm">
+                        (sorted by distance)
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    All Professionals ({professionals.length})
+                    {customerLocation && locationInput && (
+                      <span className="text-blue-200 font-normal ml-2 text-sm">
+                        (sorted by distance)
+                      </span>
+                    )}
+                  </>
+                )}
+              </h3>
+            </div>
+
+            {/* Results Grid */}
+            {sortedProfessionals.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {sortedProfessionals.map((professional) => (
+                  <ProfessionalCard
+                    key={professional.id}
+                    professional={professional}
+                    userId={professional.userId}
+                    distance={professional.distance}
+                    averageRating={professional.averageRating}
+                    reviewCount={professional.reviewCount}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
+                <div className="text-6xl mb-4">
+                  {searchQuery || locationInput ? '🔍' : '👷'}
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  {searchQuery || locationInput ? 'No Professionals Found' : 'No Professionals Available Yet'}
+                </h3>
+                <p className="text-gray-600 mb-4 max-w-md mx-auto">
+                  {searchQuery || locationInput ? (
+                    <>
+                      We couldn't find any professionals matching your search.
+                      {searchQuery && (
+                        <span className="block mt-2">
+                          Search: <span className="font-semibold">"{searchQuery}"</span>
+                        </span>
+                      )}
+                      {maxDistance !== 'all' && (
+                        <span className="block mt-1">
+                          Within: <span className="font-semibold">{maxDistance} km</span>
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    'Be the first professional to join our platform!'
+                  )}
+                </p>
+                <div className="mt-6 space-y-3">
+                  {searchQuery || locationInput ? (
+                    <>
+                      <p className="text-sm text-gray-500 mb-2">Suggestions:</p>
+                      <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 mb-4">
+                        <li>Try different search terms (e.g., "Plumber", "Electrician")</li>
+                        <li>Clear your location filter or try a different area</li>
+                        <li>Increase your max distance radius</li>
+                        <li>Check back later as new professionals join</li>
+                      </ul>
+                      <div className="flex gap-3 justify-center">
+                        <button
+                          onClick={() => {
+                            setSearchQuery('');
+                            setLocationInput('');
+                            setMaxDistance('all');
+                          }}
+                          className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                        >
+                          Clear Filters
+                        </button>
+                        <Link
+                          to="/"
+                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        >
+                          View All Professionals
+                        </Link>
+                      </div>
+                    </>
+                  ) : (
+                    <Link
+                      to="/pro-onboarding"
+                      className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      Become a Pro
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </>
+  );
+}
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    // Initialize authentication
+    const initializeAuth = async () => {
+      try {
+        // Check for initial auth token from window
+        const initialAuthToken = window.__initial_auth_token;
+        
+        if (initialAuthToken) {
+          // Sign in with custom token if provided
+          try {
+            await signInWithCustomToken(auth, initialAuthToken);
+          } catch (error) {
+            console.error('Custom token sign-in failed:', error);
+            // Fall back to anonymous sign-in
+            await signInAnonymously(auth);
+          }
+        } else {
+          // Sign in anonymously if no token provided
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error('Authentication error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Set up auth state listener
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Set user context in Sentry for error tracking
+        setSentryUser(currentUser);
+      } else {
+        // Clear user context when logged out
+        setSentryUser(null);
+      }
+    });
+
+    // Initialize auth
+    initializeAuth();
+
+    // Cleanup listener on unmount
+    return () => unsubscribe();
+  }, []);
+
+  // Search is now handled in HomePage component
+
+  // Show loading screen until authentication is ready
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-blue-900">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600 text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ToastProvider>
+      <LoadingProvider>
+        <Router>
+          <div className="min-h-screen bg-blue-900">
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <HomePage
+                    user={user}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                  />
+                }
+              />
+              <Route path="/pro-onboarding" element={<ProOnboarding />} />
+              <Route path="/pro-details/:id" element={<ProfessionalDetails />} />
+              <Route path="/book/:id" element={<BookingPage />} />
+              <Route path="/pro-dashboard" element={<ProDashboard />} />
+              <Route path="/chat/:bookingId" element={<ChatPage />} />
+          <Route path="/my-messages" element={<MyMessages />} />
+          <Route path="/my-bookings" element={<MyBookings />} />
+          <Route path="/my-favorites" element={<MyFavorites />} />
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            </Routes>
+          </div>
+        </Router>
+      </LoadingProvider>
+    </ToastProvider>
+  );
+}
+
+export default App;
