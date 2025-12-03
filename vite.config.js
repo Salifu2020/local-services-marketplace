@@ -23,10 +23,12 @@ export default defineConfig({
       output: {
         // Manual chunk splitting for better caching
         manualChunks: (id) => {
-          // React vendor chunk
+          // React and React DOM must be in the same chunk to avoid issues
           if (id.includes('node_modules/react') || 
-              id.includes('node_modules/react-dom') || 
-              id.includes('node_modules/react-router')) {
+              id.includes('node_modules/react-dom') ||
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/react-i18next') ||
+              id.includes('node_modules/@stripe/react-stripe-js')) {
             return 'react-vendor';
           }
           
@@ -67,9 +69,19 @@ export default defineConfig({
   },
   // Optimize dependencies
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom'],
+    include: [
+      'react', 
+      'react-dom', 
+      'react-router-dom',
+      'react-i18next',
+      '@stripe/react-stripe-js'
+    ],
     // Exclude Firebase from pre-bundling (it's ESM-only)
     exclude: ['firebase'],
+  },
+  // Ensure React is resolved correctly
+  resolve: {
+    dedupe: ['react', 'react-dom'],
   },
 })
 
