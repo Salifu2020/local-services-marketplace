@@ -20,6 +20,14 @@ export default defineConfig({
     port: 3001,
     open: true
   },
+  preview: {
+    port: 4173,
+    strictPort: true,
+    // Ensure proper MIME types for static assets
+    headers: {
+      'Cache-Control': 'public, max-age=31536000',
+    },
+  },
   build: {
     // Enable code splitting
     rollupOptions: {
