@@ -4,7 +4,10 @@ import { visualizer } from 'rollup-plugin-visualizer'
 
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      // Ensure React is properly transformed
+      jsxRuntime: 'automatic',
+    }),
     // Bundle analyzer - generates stats.html in dist folder
     visualizer({
       filename: 'dist/stats.html',
@@ -23,12 +26,18 @@ export default defineConfig({
       output: {
         // Manual chunk splitting for better caching
         manualChunks: (id) => {
-          // Don't split React - keep it in main bundle to ensure it loads first
-          // This prevents "Cannot read properties of undefined" errors
+          // CRITICAL: Keep ALL React-related code together to prevent loading issues
+          // This includes React core, React DOM, and all React-dependent libraries
           if (id.includes('node_modules/react') || 
               id.includes('node_modules/react-dom') ||
-              id.includes('node_modules/react/jsx-runtime')) {
-            // Keep React in main bundle - don't split it
+              id.includes('node_modules/react/jsx-runtime') ||
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/react-i18next') ||
+              id.includes('node_modules/@stripe/react-stripe-js') ||
+              id.includes('node_modules/@sentry/react') ||
+              id.includes('node_modules/use-sync-external-store') ||
+              id.includes('node_modules/scheduler')) {
+            // Keep ALL React code in main bundle - don't split it
             return undefined;
           }
           
@@ -37,16 +46,9 @@ export default defineConfig({
             return 'firebase-vendor';
           }
           
-          // Sentry vendor chunk
+          // Other Sentry packages (not @sentry/react)
           if (id.includes('node_modules/@sentry')) {
             return 'sentry-vendor';
-          }
-          
-          // React-related packages (but not React core)
-          if (id.includes('node_modules/react-router') ||
-              id.includes('node_modules/react-i18next') ||
-              id.includes('node_modules/@stripe/react-stripe-js')) {
-            return 'react-vendor';
           }
           
           // Other large vendor libraries
@@ -54,6 +56,12 @@ export default defineConfig({
             return 'vendor';
           }
         },
+        // Ensure proper chunk loading order
+        entryFileNames: 'js/[name]-[hash].js',
+        chunkFileNames: 'js/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
         // Optimize chunk file names
         chunkFileNames: 'js/[name]-[hash].js',
         entryFileNames: 'js/[name]-[hash].js',
