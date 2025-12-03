@@ -5,19 +5,19 @@ Express API server for processing Stripe payments.
 ## Setup
 
 1. **Install dependencies:**
-   ```bash
-   cd server
-   npm install
-   ```
+```bash
+cd server
+npm install
+```
 
 2. **Create `.env` file:**
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+cp .env.example .env
+```
    Then edit `.env` with your Stripe keys.
 
 3. **Run server:**
-   ```bash
+```bash
    npm start        # Production
    npm run dev      # Development (with nodemon)
    ```
