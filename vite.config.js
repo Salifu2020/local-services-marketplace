@@ -62,12 +62,6 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
-        // Optimize chunk file names
-        chunkFileNames: 'js/[name]-[hash].js',
-        entryFileNames: 'js/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]',
-      },
-    },
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
     // Enable source maps for production debugging (optional)
