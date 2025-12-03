@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { auth, db, appId } from '../firebase';
-import { doc, getDoc, collection, addDoc, onSnapshot, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
+import ServicePackages from '../components/packages/ServicePackages';
+import { calculateBookingTravelFee, isWithinServiceArea } from '../utils/travelFee';
+import { mockGeocode } from '../utils/geocoding';
+import { useToast } from '../context/ToastContext';
+import { useTranslation } from 'react-i18next';
+import { 
+  isDateBlocked, 
+  isVacationDate, 
+  generateAvailableTimeSlots,
+  isBookingAvailable 
+} from '../utils/availability';
 
 // Helper function to get day name from date
 const getDayName = (date) => {
@@ -58,14 +69,29 @@ const isPastDate = (date) => {
 function BookingPage() {
   const { id: proId } = useParams();
   const navigate = useNavigate();
+  const { showError: showToastError, showSuccess } = useToast();
+  const { t } = useTranslation();
   const [professional, setProfessional] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
+  const [duration, setDuration] = useState(2); // Default 2 hours
+  const [notes, setNotes] = useState('');
+  const [recurring, setRecurring] = useState(false);
+  const [recurringType, setRecurringType] = useState('weekly'); // weekly, bi-weekly, monthly
+  const [recurringEndDate, setRecurringEndDate] = useState(null);
+  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [selectedAddOns, setSelectedAddOns] = useState([]);
+  const [packages, setPackages] = useState([]);
+  const [pricingMode, setPricingMode] = useState('hourly'); // 'hourly' or 'package'
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [customerLocation, setCustomerLocation] = useState('');
+  const [customerLocationCoords, setCustomerLocationCoords] = useState(null);
+  const [travelFee, setTravelFee] = useState(0);
+  const [geocodingLocation, setGeocodingLocation] = useState(false);
 
   // Fetch professional data
   useEffect(() => {
@@ -108,6 +134,49 @@ function BookingPage() {
 
     fetchProfessional();
   }, [proId]);
+
+  // Calculate travel fee when customer location or professional changes
+  useEffect(() => {
+    if (professional && customerLocationCoords) {
+      const fee = calculateBookingTravelFee(professional, customerLocationCoords);
+      setTravelFee(fee);
+      
+      // Check if within service area
+      const withinArea = isWithinServiceArea(professional, customerLocationCoords);
+      if (!withinArea && professional.serviceRadius) {
+        showToastError(`Your location is outside the professional's service area (${professional.serviceRadius} km radius). Travel fee may apply.`);
+      }
+    } else {
+      setTravelFee(0);
+    }
+  }, [professional, customerLocationCoords, showToastError]);
+
+  const handleLocationSearch = async () => {
+    if (!customerLocation.trim()) {
+      showToastError('Please enter a location');
+      return;
+    }
+
+    setGeocodingLocation(true);
+    try {
+      const coords = await mockGeocode(customerLocation);
+      if (coords) {
+        setCustomerLocationCoords({
+          lat: coords.lat,
+          lon: coords.lon,
+          locationText: customerLocation
+        });
+        showSuccess('Location found!');
+      } else {
+        showToastError('Location not found. Please try a different address.');
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      showToastError('Failed to find location. Please try again.');
+    } finally {
+      setGeocodingLocation(false);
+    }
+  };
 
   // Fetch existing bookings for this professional
   useEffect(() => {
@@ -153,6 +222,43 @@ function BookingPage() {
     };
   }, [proId]);
 
+  // Fetch service packages
+  useEffect(() => {
+    if (!proId) return;
+
+    const packagesRef = collection(
+      db,
+      'artifacts',
+      appId,
+      'public',
+      'data',
+      'professionals',
+      proId,
+      'packages'
+    );
+
+    const packagesQuery = query(packagesRef, orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(
+      packagesQuery,
+      (snapshot) => {
+        const packagesList = [];
+        snapshot.forEach((doc) => {
+          packagesList.push({
+            id: doc.id,
+            ...doc.data(),
+          });
+        });
+        setPackages(packagesList);
+      },
+      (err) => {
+        console.error('Error fetching packages:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [proId]);
+
   // Get available dates (next 30 days)
   const getAvailableDates = () => {
     if (!professional?.availability) return [];
@@ -165,6 +271,16 @@ function BookingPage() {
       date.setDate(today.getDate() + i);
       
       if (isPastDate(date)) continue;
+
+      // Check if date is blocked
+      if (isDateBlocked(date, professional.blockedDates)) {
+        continue;
+      }
+
+      // Check if date is in vacation period
+      if (isVacationDate(date, professional.vacationMode, professional.vacationStartDate, professional.vacationEndDate)) {
+        continue;
+      }
 
       const dayName = getDayName(date);
       const daySchedule = professional.availability[dayName];
@@ -188,23 +304,18 @@ function BookingPage() {
       return [];
     }
 
-    // Generate all time slots for this day
-    const allSlots = generateTimeSlots(daySchedule.startTime, daySchedule.endTime);
-
-    // Filter out booked time slots
-    const dateString = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Use the advanced availability utility to generate available time slots
+    // This considers blocked dates, vacation mode, buffer time, and existing bookings
+    const durationMinutes = duration * 60;
     
-    const bookedSlots = bookings
-      .filter(booking => {
-        if (!booking.date) return false;
-        const bookingDate = booking.date.toDate 
-          ? booking.date.toDate().toISOString().split('T')[0]
-          : new Date(booking.date).toISOString().split('T')[0];
-        return bookingDate === dateString;
-      })
-      .map(booking => booking.time || booking.startTime);
-
-    return allSlots.filter(slot => !bookedSlots.includes(slot.value));
+    return generateAvailableTimeSlots({
+      date: selectedDate,
+      availability: professional.availability,
+      durationMinutes,
+      professional: professional,
+      existingBookings: bookings,
+      intervalMinutes: 30,
+    });
   };
 
   const handleDateSelect = (date) => {
@@ -230,12 +341,18 @@ function BookingPage() {
       return;
     }
 
-    // Double-check that the time slot is still available
-    const availableSlots = getAvailableTimeSlots();
-    const isSlotAvailable = availableSlots.some(slot => slot.value === selectedTime);
+    // Double-check that the time slot is still available using advanced availability checks
+    const durationMinutes = duration * 60;
+    const availabilityCheck = isBookingAvailable({
+      date: selectedDate,
+      time: selectedTime,
+      durationMinutes,
+      professional: professional,
+      existingBookings: bookings,
+    });
 
-    if (!isSlotAvailable) {
-      setError('This time slot is no longer available. Please select another time.');
+    if (!availabilityCheck.available) {
+      setError(availabilityCheck.reason || 'This time slot is no longer available. Please select another time.');
       return;
     }
 
@@ -257,23 +374,117 @@ function BookingPage() {
       const bookingDate = new Date(selectedDate);
       bookingDate.setHours(0, 0, 0, 0);
 
-      const bookingData = {
-        professionalId: proId,
-        userId: user.uid,
-        date: bookingDate, // Firestore will convert Date to Timestamp
-        time: selectedTime,
-        status: 'Pending',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+      // Create booking(s) - handle recurring bookings
+      const bookingsToCreate = [];
+      
+      if (recurring && recurringEndDate) {
+        // Generate recurring bookings
+        let currentDate = new Date(bookingDate);
+        const endDate = new Date(recurringEndDate);
+        endDate.setHours(23, 59, 59, 999);
+        
+        const dayIncrement = recurringType === 'weekly' ? 7 : 
+                            recurringType === 'bi-weekly' ? 14 : 
+                            30; // monthly
 
-      await addDoc(bookingsRef, bookingData);
+        // Calculate amount for recurring bookings
+        let amount = 0;
+        if (pricingMode === 'package' && selectedPackage) {
+          amount = selectedPackage.price;
+          selectedAddOns.forEach((addOnId) => {
+            const addOnIndex = parseInt(addOnId.split('-')[1]);
+            const addOn = selectedPackage.addOns[addOnIndex];
+            if (addOn) amount += addOn.price;
+          });
+        } else if (professional?.hourlyRate) {
+          amount = professional.hourlyRate * duration;
+        }
+        
+        // Add travel fee if customer location is set (applies to all recurring bookings)
+        if (travelFee > 0) {
+          amount += travelFee;
+        }
+
+        const recurringGroupId = Date.now().toString();
+        
+        while (currentDate <= endDate) {
+          const recurringBookingDate = new Date(currentDate);
+          recurringBookingDate.setHours(0, 0, 0, 0);
+          
+          bookingsToCreate.push({
+            professionalId: proId,
+            userId: user.uid,
+            date: recurringBookingDate,
+            time: selectedTime,
+            duration: duration,
+            notes: notes.trim() || null,
+            status: 'Pending',
+            isRecurring: true,
+            recurringType: recurringType,
+            recurringGroupId: recurringGroupId,
+            pricingMode: pricingMode,
+            packageId: pricingMode === 'package' && selectedPackage ? selectedPackage.id : null,
+            packageName: pricingMode === 'package' && selectedPackage ? selectedPackage.name : null,
+            selectedAddOns: selectedAddOns,
+            amount: amount > 0 ? amount : null,
+            paymentStatus: 'Pending',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          
+          currentDate.setDate(currentDate.getDate() + dayIncrement);
+        }
+      } else {
+        // Single booking
+        // Calculate amount based on pricing mode
+        let amount = 0;
+        if (pricingMode === 'package' && selectedPackage) {
+          amount = selectedPackage.price;
+          // Add selected add-ons
+          selectedAddOns.forEach((addOnId) => {
+            const addOnIndex = parseInt(addOnId.split('-')[1]);
+            const addOn = selectedPackage.addOns[addOnIndex];
+            if (addOn) {
+              amount += addOn.price;
+            }
+          });
+        } else if (professional?.hourlyRate) {
+          amount = professional.hourlyRate * duration;
+        }
+
+        bookingsToCreate.push({
+          professionalId: proId,
+          userId: user.uid,
+          date: bookingDate,
+          time: selectedTime,
+          duration: duration,
+          notes: notes.trim() || null,
+          status: 'Pending',
+          isRecurring: false,
+          pricingMode: pricingMode,
+          packageId: pricingMode === 'package' && selectedPackage ? selectedPackage.id : null,
+          packageName: pricingMode === 'package' && selectedPackage ? selectedPackage.name : null,
+          selectedAddOns: selectedAddOns,
+          amount: amount > 0 ? amount : null,
+          paymentStatus: 'Pending',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Create all bookings
+      for (const bookingData of bookingsToCreate) {
+        await addDoc(bookingsRef, bookingData);
+      }
 
       setSuccess(true);
       
       // Reset form
       setSelectedDate(null);
       setSelectedTime('');
+      setSelectedPackage(null);
+      setSelectedAddOns([]);
+      setPricingMode('hourly');
 
       // Redirect after 2 seconds
       setTimeout(() => {
@@ -294,7 +505,7 @@ function BookingPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
             </div>
           </div>
@@ -316,7 +527,7 @@ function BookingPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
             </div>
           </div>
@@ -347,7 +558,7 @@ function BookingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              Customer Portal
+              ExpertNextDoor
             </Link>
             <div className="flex items-center space-x-4">
               <Link
@@ -422,10 +633,10 @@ function BookingPage() {
                       key={date.toISOString()}
                       type="button"
                       onClick={() => handleDateSelect(date)}
-                      className={`p-4 rounded-lg border-2 transition-colors ${
+                      className={`p-4 rounded-lg border-2 transition-all duration-200 ${
                         isSelected
-                          ? 'border-blue-600 bg-blue-50 text-blue-900'
-                          : 'border-gray-200 hover:border-blue-300 bg-white text-gray-900'
+                          ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-md scale-105'
+                          : 'border-gray-200 hover:border-blue-300 bg-white text-gray-900 hover:shadow-md transform hover:scale-105 active:scale-95'
                       }`}
                     >
                       <div className="text-center">
@@ -484,6 +695,172 @@ function BookingPage() {
             </div>
           )}
 
+          {/* Service Duration */}
+          {selectedDate && selectedTime && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Service Duration <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { value: 1, label: '1 Hour' },
+                  { value: 2, label: '2 Hours' },
+                  { value: 4, label: '4 Hours' },
+                  { value: 8, label: 'Full Day (8hrs)' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setDuration(option.value)}
+                    className={`p-3 rounded-lg border-2 transition-colors text-sm font-medium ${
+                      duration === option.value
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-gray-200 hover:border-blue-300 bg-white text-gray-900'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Customer Location (for travel fee calculation) */}
+          {selectedDate && selectedTime && (
+            <div className="mb-6">
+              <label htmlFor="customerLocation" className="block text-sm font-medium text-gray-700 mb-2">
+                Service Location (Optional)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="customerLocation"
+                  value={customerLocation}
+                  onChange={(e) => setCustomerLocation(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleLocationSearch()}
+                  placeholder="Enter your address or city (e.g., Miami, FL)"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={handleLocationSearch}
+                  disabled={geocodingLocation || !customerLocation.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {geocodingLocation ? 'Finding...' : 'Find'}
+                </button>
+              </div>
+              {customerLocationCoords && (
+                <p className="text-xs text-green-600 mt-1">
+                  ✓ Location set: {customerLocationCoords.locationText}
+                  {travelFee > 0 && (
+                    <span className="ml-2">• Travel fee: ${travelFee.toFixed(2)}</span>
+                  )}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                {t('booking.serviceLocationHelp')}
+              </p>
+            </div>
+          )}
+
+          {/* Booking Notes */}
+          {selectedDate && selectedTime && (
+            <div className="mb-6">
+              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
+                {t('booking.specialInstructions')}
+              </label>
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                placeholder="Add any special instructions, requirements, or notes for the professional..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                maxLength={500}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {notes.length}/500 characters
+              </p>
+            </div>
+          )}
+
+          {/* Recurring Booking Option */}
+          {selectedDate && selectedTime && (
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  type="checkbox"
+                  id="recurring"
+                  checked={recurring}
+                  onChange={(e) => {
+                    setRecurring(e.target.checked);
+                    if (!e.target.checked) {
+                      setRecurringEndDate(null);
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="recurring" className="text-sm font-medium text-gray-700">
+                  Make this a recurring booking
+                </label>
+              </div>
+
+              {recurring && (
+                <div className="ml-7 space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Repeat Frequency
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { value: 'weekly', label: 'Weekly' },
+                        { value: 'bi-weekly', label: 'Bi-Weekly' },
+                        { value: 'monthly', label: 'Monthly' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setRecurringType(option.value)}
+                          className={`p-2 rounded-lg border-2 transition-colors text-sm font-medium ${
+                            recurringType === option.value
+                              ? 'border-blue-600 bg-blue-600 text-white'
+                              : 'border-gray-200 hover:border-blue-300 bg-white text-gray-900'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="recurringEndDate" className="block text-sm font-medium text-gray-700 mb-2">
+                      End Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      id="recurringEndDate"
+                      value={recurringEndDate ? recurringEndDate.toISOString().split('T')[0] : ''}
+                      onChange={(e) => {
+                        const date = e.target.value ? new Date(e.target.value) : null;
+                        if (date && date >= selectedDate) {
+                          setRecurringEndDate(date);
+                        }
+                      }}
+                      min={selectedDate.toISOString().split('T')[0]}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required={recurring}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Bookings will be created from {formatDate(selectedDate)} until this date
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Booking Summary */}
           {selectedDate && selectedTime && (
             <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -491,8 +868,55 @@ function BookingPage() {
               <div className="space-y-1 text-sm text-gray-600">
                 <p><strong>Date:</strong> {formatDate(selectedDate)}</p>
                 <p><strong>Time:</strong> {availableTimeSlots.find(s => s.value === selectedTime)?.label || selectedTime}</p>
-                {professional?.hourlyRate && (
-                  <p><strong>Rate:</strong> ${professional.hourlyRate.toFixed(2)}/hr</p>
+                <p><strong>Duration:</strong> {duration} {duration === 1 ? 'hour' : 'hours'}</p>
+                {pricingMode === 'hourly' && professional?.hourlyRate && (
+                  <p><strong>{t('booking.rate')}:</strong> ${professional.hourlyRate.toFixed(2)}/hr</p>
+                )}
+                {pricingMode === 'hourly' && professional?.hourlyRate && (
+                  <>
+                    {travelFee > 0 && (
+                      <p className="text-sm text-gray-600 mt-2">
+                        <strong>{t('booking.travelFee')}:</strong> ${travelFee.toFixed(2)}
+                      </p>
+                    )}
+                    <p className="text-base font-semibold text-gray-900 mt-2">
+                      <strong>{t('booking.estimatedTotal')}:</strong> ${((professional.hourlyRate * duration) + travelFee).toFixed(2)}
+                    </p>
+                  </>
+                )}
+                {pricingMode === 'package' && selectedPackage && (
+                  <div className="mt-2">
+                    <p><strong>{t('booking.package')}:</strong> {selectedPackage.name}</p>
+                    {travelFee > 0 && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        <strong>{t('booking.travelFee')}:</strong> ${travelFee.toFixed(2)}
+                      </p>
+                    )}
+                    <p className="text-base font-semibold text-gray-900 mt-1">
+                      <strong>{t('booking.total')}:</strong> $
+                      {(
+                        selectedPackage.price +
+                        selectedAddOns.reduce((sum, addOnId) => {
+                          const addOnIndex = parseInt(addOnId.split('-')[1]);
+                          const addOn = selectedPackage.addOns[addOnIndex];
+                          return sum + (addOn?.price || 0);
+                        }, 0) +
+                        travelFee
+                      ).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+                {recurring && recurringEndDate && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-blue-600 font-medium">
+                      🔄 Recurring: {recurringType === 'weekly' ? 'Every week' : 
+                                    recurringType === 'bi-weekly' ? 'Every 2 weeks' : 
+                                    'Every month'} until {formatDate(recurringEndDate)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Multiple bookings will be created automatically
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

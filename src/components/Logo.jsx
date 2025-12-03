@@ -32,7 +32,7 @@ function Logo({ showText = true, size = 'md', link = false, className = '' }) {
       </span>
       {showText && (
         <span className={`${textSizeClasses[size]} font-bold ${textColor}`}>
-          Customer Portal
+          ExpertNextDoor
         </span>
       )}
     </div>

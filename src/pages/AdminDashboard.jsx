@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { auth, db, appId } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { Skeleton } from '../components/Skeleton';
+import VerificationManager from '../components/admin/VerificationManager';
 
 // Hardcoded admin user ID
 const ADMIN_USER_ID = 'admin-123';
@@ -123,7 +125,7 @@ function AdminDashboard() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
               <div className="flex items-center space-x-4">
                 <Link
@@ -166,7 +168,7 @@ function AdminDashboard() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
               <div className="flex items-center space-x-4">
                 <Link
@@ -181,8 +183,15 @@ function AdminDashboard() {
         </nav>
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading admin dashboard...</p>
+            <div className="space-y-4 w-full max-w-4xl">
+              <Skeleton variant="text" lines={2} className="h-8" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton variant="card" key={i} />
+                ))}
+              </div>
+              <Skeleton variant="card" />
+            </div>
           </div>
         </div>
       </>
@@ -197,7 +206,7 @@ function AdminDashboard() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
               <div className="flex items-center space-x-4">
                 <Link
@@ -234,8 +243,16 @@ function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              Customer Portal
+              ExpertNextDoor
             </Link>
+            <div className="flex items-center space-x-4">
+              <Link
+                to="/admin-disputes"
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+              >
+                ⚖️ Dispute Resolution
+              </Link>
+            </div>
             <div className="flex items-center space-x-4">
               <span className="px-3 py-1 text-xs font-semibold text-white bg-red-600 rounded-full">
                 ADMIN
@@ -353,14 +370,124 @@ function AdminDashboard() {
           </div>
         </div>
 
-        {/* Admin Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
-            <strong>Admin User ID:</strong> <span className="font-mono">{user?.uid}</span>
-          </p>
-          <p className="text-xs text-blue-600 mt-1">
-            This dashboard is only accessible to users with the admin user ID.
-          </p>
+        {/* Professional Verification Management */}
+        <div className="mb-8">
+          <VerificationManager />
+        </div>
+
+        {/* Debug & Admin Info Panel */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Debug & Admin Panel</h2>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Authentication Info */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Authentication</h3>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Current User ID</p>
+                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-300 break-all">
+                      {user?.uid || 'Not authenticated'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Email</p>
+                    <p className="text-sm bg-white p-2 rounded border border-gray-300">
+                      {user?.email || 'Anonymous user'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Auth Provider</p>
+                    <p className="text-sm bg-white p-2 rounded border border-gray-300">
+                      {user?.providerData?.[0]?.providerId || 'anonymous'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Is Admin</p>
+                    <p className="text-sm bg-white p-2 rounded border border-gray-300">
+                      {isAdmin ? '✅ Yes' : '❌ No'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Firebase & Environment Info */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">System Info</h3>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Firebase Project ID</p>
+                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-300 break-all">
+                      {import.meta.env.VITE_FIREBASE_PROJECT_ID || 'Not set'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">App ID</p>
+                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-300">
+                      {appId || 'Not set'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Environment</p>
+                    <p className="text-sm bg-white p-2 rounded border border-gray-300">
+                      {import.meta.env.MODE || 'development'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Sentry Status</p>
+                    <p className="text-sm bg-white p-2 rounded border border-gray-300">
+                      {import.meta.env.VITE_SENTRY_DSN ? '✅ Configured' : '❌ Not configured'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="mt-6 pt-6 border-t border-gray-300">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(user?.uid || '');
+                    alert('User ID copied to clipboard!');
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  Copy User ID
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('Current User:', user);
+                    console.log('Firebase Config:', {
+                      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+                      appId: appId,
+                    });
+                    alert('Debug info logged to console!');
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                >
+                  Log Debug Info
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.reload();
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                >
+                  Reload Page
+                </button>
+              </div>
+            </div>
+
+            {/* Admin Note */}
+            <div className="mt-6 pt-6 border-t border-gray-300">
+              <p className="text-xs text-gray-600">
+                <strong>Note:</strong> This debug panel is only visible to admin users. 
+                Admin User ID: <span className="font-mono">{ADMIN_USER_ID}</span>
+              </p>
+            </div>
+          </div>
         </div>
       </main>
     </>

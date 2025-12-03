@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { auth, db, appId } from '../firebase';
 import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import { useFavorites } from '../hooks/useFavorites';
+import { ProfessionalCardSkeleton, Skeleton } from '../components/Skeleton';
 
 // Star Rating Component (Reusable)
 function StarRating({ rating, interactive = false, size = 'md' }) {
@@ -243,7 +244,7 @@ function MyFavorites() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
               <div className="flex items-center space-x-4">
                 <Link
@@ -256,12 +257,16 @@ function MyFavorites() {
             </div>
           </div>
         </nav>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading favorites...</p>
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <Skeleton variant="text" lines={2} className="h-8 mb-2" />
           </div>
-        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ProfessionalCardSkeleton key={i} />
+            ))}
+          </div>
+        </main>
       </>
     );
   }
@@ -272,7 +277,7 @@ function MyFavorites() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              Customer Portal
+              ExpertNextDoor
             </Link>
             <div className="flex items-center space-x-4">
               <Link

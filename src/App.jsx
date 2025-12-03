@@ -1,25 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { auth, db, appId } from './firebase';
+import './i18n/config'; // Initialize i18n
 import { signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { ToastProvider } from './context/ToastContext';
 import { LoadingProvider } from './context/LoadingContext';
-import ProOnboarding from './ProOnboarding';
-import ProfessionalDetails from './pages/ProfessionalDetails';
-import BookingPage from './pages/BookingPage';
-import ProDashboard from './pages/ProDashboard';
-import ChatPage from './pages/ChatPage';
-import MyMessages from './pages/MyMessages';
-import MyBookings from './pages/MyBookings';
-import MyFavorites from './pages/MyFavorites';
-import AdminDashboard from './pages/AdminDashboard';
 import NotificationBell from './components/NotificationBell';
 import Logo from './components/Logo';
 // import SentryTestButton from './components/SentryTestButton'; // Uncomment to test Sentry
 import { useFavorites } from './hooks/useFavorites';
 import { mockGeocode as mockGeocodeUtil } from './utils/geocoding';
 import { setSentryUser } from './sentry';
+import { ProfessionalCardSkeleton } from './components/Skeleton';
+import RouteLoading from './components/RouteLoading';
+import { preloadCriticalRoutes } from './utils/preload';
+import { usePullToRefresh } from './hooks/usePullToRefresh';
+import PullToRefresh from './components/PullToRefresh';
+import { useMobileKeyboard } from './hooks/useMobileKeyboard';
+import SearchFilters from './components/SearchFilters';
+import VerificationBadges, { CompactVerificationBadges } from './components/VerificationBadges';
+import { getReferralCodeFromURL, processReferralCode } from './utils/referral';
+import LanguageSelector from './components/LanguageSelector';
+import { useTranslation } from 'react-i18next';
+
+// Lazy load route components for code splitting
+const ProOnboarding = lazy(() => import('./ProOnboarding'));
+const ProfessionalDetails = lazy(() => import('./pages/ProfessionalDetails'));
+const BookingPage = lazy(() => import('./pages/BookingPage'));
+const ProDashboard = lazy(() => import('./pages/ProDashboard'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const MyMessages = lazy(() => import('./pages/MyMessages'));
+const MyBookings = lazy(() => import('./pages/MyBookings'));
+const MyFavorites = lazy(() => import('./pages/MyFavorites'));
+const MyProfile = lazy(() => import('./pages/MyProfile'));
+const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminDisputeDashboard = lazy(() => import('./pages/AdminDisputeDashboard'));
+const MyDisputes = lazy(() => import('./pages/MyDisputes'));
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -78,6 +96,7 @@ function Navigation() {
   const isOnboarding = location.pathname === '/pro-onboarding';
   const { favorites } = useFavorites();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { t } = useTranslation();
 
   if (isOnboarding) {
     return null; // Don't show nav on onboarding page
@@ -94,11 +113,18 @@ function Navigation() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-4">
+            <LanguageSelector />
             <Link
               to="/"
               className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
             >
               Find a Pro
+            </Link>
+            <Link
+              to="/dashboard"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+            >
+              Dashboard
             </Link>
             <Link
               to="/my-bookings"
@@ -124,10 +150,16 @@ function Navigation() {
               )}
             </Link>
             <Link
+              to="/my-profile"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+            >
+              {t('nav.myProfile')}
+            </Link>
+            <Link
               to="/pro-dashboard"
               className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
             >
-              Pro Dashboard
+              {t('nav.proDashboard')}
             </Link>
             <NotificationBell />
             <Link
@@ -171,6 +203,13 @@ function Navigation() {
                 Find a Pro
               </Link>
               <Link
+                to="/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                Dashboard
+              </Link>
+              <Link
                 to="/my-bookings"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
@@ -199,19 +238,29 @@ function Navigation() {
                 </span>
               </Link>
               <Link
+                to="/my-profile"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                {t('nav.myProfile')}
+              </Link>
+              <Link
                 to="/pro-dashboard"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
               >
-                Pro Dashboard
+                {t('nav.proDashboard')}
               </Link>
               <Link
                 to="/pro-onboarding"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-3 py-2 rounded-md text-base font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
               >
-                Become a Pro
+                {t('onboarding.title')}
               </Link>
+              <div className="mt-4 pt-4 border-t border-amber-700">
+                <LanguageSelector />
+              </div>
             </div>
           </div>
         )}
@@ -250,6 +299,7 @@ function StarRating({ rating, interactive = false, size = 'md' }) {
 // Professional Card Component
 function ProfessionalCard({ professional, userId, distance, averageRating = null, reviewCount = 0 }) {
   const { toggleFavorite, isFavorite } = useFavorites();
+  const { t } = useTranslation();
   const isFav = isFavorite(userId);
 
   const handleFavoriteClick = (e) => {
@@ -259,11 +309,11 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 relative">
+    <div className="bg-white rounded-lg shadow-md hover:shadow-lg active:shadow-md transition-all p-4 sm:p-6 border border-gray-200 relative touch-manipulation">
       {/* Heart Icon */}
       <button
         onClick={handleFavoriteClick}
-        className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
+        className="absolute top-4 right-4 p-2 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-all touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-90"
         aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
       >
         <svg
@@ -285,12 +335,18 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
 
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 pr-12">
-          <h3 className="text-xl font-semibold text-gray-900 mb-1">
-            {professional.serviceType || 'Professional'}
-          </h3>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-xl font-semibold text-gray-900">
+              {professional.serviceType || 'Professional'}
+            </h3>
+            <CompactVerificationBadges professional={professional} />
+          </div>
           <p className="text-sm text-gray-500 mb-2">
             Service Provider
           </p>
+          <div className="mt-2">
+            <VerificationBadges professional={professional} size="sm" />
+          </div>
         </div>
       </div>
       
@@ -325,7 +381,7 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
         <div className="mb-3">
           <p className="text-sm font-medium text-gray-700 flex items-center">
             <span className="mr-1">📍</span>
-            <span className="font-semibold">{distance.toFixed(1)} km away</span>
+            <span className="font-semibold">{distance.toFixed(1)} km {t('home.distanceAway')}</span>
           </p>
         </div>
       )}
@@ -357,6 +413,7 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
 
 // Home page component
 function HomePage({ user, searchQuery, setSearchQuery }) {
+  const { t } = useTranslation();
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -364,6 +421,41 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
   const [customerLocation, setCustomerLocation] = useState({ lat: 30.2672, lon: -97.7431 }); // Default: Austin
   const [geocoding, setGeocoding] = useState(false);
   const [maxDistance, setMaxDistance] = useState('all'); // 'all', '5', '10', '25'
+  
+  // Advanced search filters
+  const [filters, setFilters] = useState({
+    category: 'all',
+    minRating: 'all',
+    priceMin: 0,
+    priceMax: 500,
+    sortBy: 'distance',
+    availability: 'all',
+  });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  
+  // Mobile UX improvements
+  const { focusInput, isKeyboardVisible } = useMobileKeyboard();
+  
+  // Pull-to-refresh functionality
+  const handleRefresh = async () => {
+    // Force reload of professionals data
+    setLoading(true);
+    // The onSnapshot will automatically update, but we can trigger a visual refresh
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setLoading(false);
+  };
+  
+  const {
+    isPulling,
+    pullDistance,
+    isRefreshing,
+    elementRef: pullToRefreshRef,
+    pullProgress,
+  } = usePullToRefresh(handleRefresh, {
+    threshold: 80,
+    resistance: 2.5,
+    disabled: loading, // Disable during loading
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -491,18 +583,41 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
   }, [filteredProfessionals.length]); // Refetch when filtered list changes
 
   // Calculate distance for each professional and add to the object
+  // Supports both single area and multi-area professionals
   const professionalsWithDistance = filteredProfessionals.map((pro) => {
     let distance = null;
     
-    // Only calculate distance if both customer and professional have coordinates
-    if (customerLocation && customerLocation.lat && customerLocation.lon && 
-        pro.lat && pro.lon) {
-      distance = haversineDistance(
-        customerLocation.lat,
-        customerLocation.lon,
-        pro.lat,
-        pro.lon
-      );
+    // Only calculate distance if customer has coordinates
+    if (customerLocation && customerLocation.lat && customerLocation.lon) {
+      // Check for multi-area support
+      if (pro.serviceAreas && Array.isArray(pro.serviceAreas) && pro.serviceAreas.length > 0) {
+        // Find the closest service area
+        let minDistance = Infinity;
+        pro.serviceAreas.forEach(area => {
+          if (area.lat && area.lon) {
+            const areaDistance = haversineDistance(
+              customerLocation.lat,
+              customerLocation.lon,
+              area.lat,
+              area.lon
+            );
+            if (areaDistance < minDistance) {
+              minDistance = areaDistance;
+            }
+          }
+        });
+        if (minDistance !== Infinity) {
+          distance = minDistance;
+        }
+      } else if (pro.lat && pro.lon) {
+        // Single area calculation
+        distance = haversineDistance(
+          customerLocation.lat,
+          customerLocation.lon,
+          pro.lat,
+          pro.lon
+        );
+      }
     }
     
     const ratings = professionalRatings[pro.id] || { averageRating: null, reviewCount: 0 };
@@ -515,38 +630,112 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
     };
   });
 
-  // Filter by max distance
-  const distanceFilteredProfessionals = professionalsWithDistance.filter((pro) => {
-    // If maxDistance is 'all', show all professionals
-    if (maxDistance === 'all') {
-      return true;
-    }
-    
-    // If professional has no distance calculated, exclude them when a max distance is set
-    if (pro.distance === null || pro.distance === undefined) {
-      return false;
-    }
-    
-    // Filter by max distance
-    const maxDistanceValue = parseFloat(maxDistance);
-    return pro.distance <= maxDistanceValue;
-  });
+  // Advanced filtering logic
+  const applyAdvancedFilters = (pros) => {
+    return pros.filter((pro) => {
+      // Filter by max distance (legacy support)
+      if (maxDistance !== 'all') {
+        if (pro.distance === null || pro.distance === undefined) {
+          return false;
+        }
+        const maxDistanceValue = parseFloat(maxDistance);
+        if (pro.distance > maxDistanceValue) {
+          return false;
+        }
+      }
 
-  // Sort by distance (closest first), then by those without coordinates
-  const sortedProfessionals = [...distanceFilteredProfessionals].sort((a, b) => {
-    // If both have distances, sort by distance
-    if (a.distance !== null && b.distance !== null) {
-      return a.distance - b.distance;
+      // Filter by service category
+      if (filters.category !== 'all') {
+        const serviceType = (pro.serviceType || '').toLowerCase();
+        const categoryMap = {
+          plumbing: ['plumber', 'plumbing'],
+          electrical: ['electrician', 'electrical'],
+          hvac: ['hvac', 'heating', 'cooling', 'air conditioning'],
+          carpentry: ['carpenter', 'carpentry', 'woodwork'],
+          painting: ['painter', 'painting'],
+          landscaping: ['landscaper', 'landscaping', 'gardening'],
+          cleaning: ['cleaner', 'cleaning', 'housekeeping'],
+          handyman: ['handyman', 'handy man'],
+          roofing: ['roofer', 'roofing'],
+          flooring: ['flooring', 'floor'],
+        };
+        const categoryKeywords = categoryMap[filters.category] || [];
+        if (!categoryKeywords.some(keyword => serviceType.includes(keyword))) {
+          return false;
+        }
+      }
+
+      // Filter by minimum rating
+      if (filters.minRating !== 'all') {
+        const minRatingValue = parseFloat(filters.minRating);
+        if (!pro.averageRating || pro.averageRating < minRatingValue) {
+          return false;
+        }
+      }
+
+      // Filter by price range
+      const hourlyRate = pro.hourlyRate || 0;
+      if (hourlyRate < filters.priceMin || hourlyRate > filters.priceMax) {
+        return false;
+      }
+
+      // Filter by availability (simplified - checks if schedule exists)
+      if (filters.availability !== 'all') {
+        // For now, we'll just check if they have a schedule
+        // In a real implementation, you'd check actual availability
+        if (!pro.schedule || Object.keys(pro.schedule).length === 0) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
+
+  // Apply advanced filters
+  const advancedFilteredProfessionals = applyAdvancedFilters(professionalsWithDistance);
+
+  // Sort professionals based on selected sort option
+  const sortedProfessionals = [...advancedFilteredProfessionals].sort((a, b) => {
+    switch (filters.sortBy) {
+      case 'price-low':
+        return (a.hourlyRate || 0) - (b.hourlyRate || 0);
+      
+      case 'price-high':
+        return (b.hourlyRate || 0) - (a.hourlyRate || 0);
+      
+      case 'rating':
+        const ratingA = a.averageRating || 0;
+        const ratingB = b.averageRating || 0;
+        if (ratingA !== ratingB) {
+          return ratingB - ratingA;
+        }
+        // If ratings are equal, sort by review count
+        return (b.reviewCount || 0) - (a.reviewCount || 0);
+      
+      case 'reviews':
+        return (b.reviewCount || 0) - (a.reviewCount || 0);
+      
+      case 'newest':
+        // Sort by createdAt if available, otherwise maintain order
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return dateB - dateA;
+      
+      case 'distance':
+      default:
+        // Sort by distance (closest first)
+        if (a.distance !== null && b.distance !== null) {
+          return a.distance - b.distance;
+        }
+        if (a.distance !== null && b.distance === null) {
+          return -1;
+        }
+        if (a.distance === null && b.distance !== null) {
+          return 1;
+        }
+        return 0;
     }
-    // If only one has distance, prioritize it
-    if (a.distance !== null && b.distance === null) {
-      return -1;
-    }
-    if (a.distance === null && b.distance !== null) {
-      return 1;
-    }
-    // If neither has distance, maintain original order
-    return 0;
   });
 
   const handleSearch = (e) => {
@@ -576,14 +765,27 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
   return (
     <>
       <Navigation />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* User ID Display - Prominently displayed */}
-        <div className="mb-6 bg-blue-800 border border-blue-700 rounded-lg p-4">
+      {/* Pull-to-refresh indicator */}
+      <PullToRefresh
+        isPulling={isPulling}
+        pullProgress={pullProgress}
+        isRefreshing={isRefreshing}
+      />
+      <main
+        ref={pullToRefreshRef}
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 touch-pan-y"
+        style={{
+          paddingTop: isPulling || isRefreshing ? `${Math.min(pullDistance, 80)}px` : '2rem',
+          transition: isPulling ? 'none' : 'padding-top 0.3s ease-out',
+        }}
+      >
+        {/* User ID Display - Hidden in production, uncomment for debugging */}
+        {/* <div className="mb-6 bg-blue-800 border border-blue-700 rounded-lg p-4">
           <p className="text-sm text-blue-100 mb-1">Current User ID:</p>
           <p className="text-lg font-mono font-semibold text-white break-all">
             {user.uid}
           </p>
-        </div>
+        </div> */}
 
         {/* Sentry Test Button - Uncomment to test Sentry error tracking */}
         {/* <div className="mb-6 flex justify-center">
@@ -595,11 +797,11 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
           <div className="w-full max-w-2xl mx-auto">
             <div className="text-center mb-4">
               <h2 className="text-3xl sm:text-4xl font-bold text-white">
-                Find Your Perfect Service Provider
+                {t('home.title')}
               </h2>
             </div>
             <p className="text-blue-100 text-center mb-8">
-              Search for professionals in your area
+              {t('home.subtitle')}
             </p>
             
             {/* Search Form with Service Type and Location */}
@@ -612,7 +814,19 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search for services (e.g., 'Plumber', 'Electrician') or keywords in bio..."
-                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all"
+                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all touch-manipulation"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    onFocus={(e) => {
+                      // Better mobile keyboard handling
+                      if (window.innerWidth < 768) {
+                        setTimeout(() => {
+                          focusInput(e.target);
+                        }, 100);
+                      }
+                    }}
                   />
                   {searchQuery && (
                     <button
@@ -627,7 +841,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     type="submit"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white px-3 sm:px-6 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium text-sm sm:text-base"
                   >
-                    Search
+                    {t('common.search')}
                   </button>
                 </div>
               </form>
@@ -639,8 +853,20 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     type="text"
                     value={locationInput}
                     onChange={(e) => setLocationInput(e.target.value)}
-                    placeholder="Your Location (e.g., 'Miami, FL' or 'Austin, TX')..."
-                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm transition-all"
+                    placeholder={t('home.yourLocation')}
+                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm transition-all touch-manipulation"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="words"
+                    spellCheck="false"
+                    onFocus={(e) => {
+                      // Better mobile keyboard handling
+                      if (window.innerWidth < 768) {
+                        setTimeout(() => {
+                          focusInput(e.target);
+                        }, 100);
+                      }
+                    }}
                   />
                   {geocoding && (
                     <div className="absolute right-20 top-1/2 transform -translate-y-1/2">
@@ -651,7 +877,8 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     <button
                       type="button"
                       onClick={() => setLocationInput('')}
-                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      aria-label="Clear location"
                     >
                       ✕
                     </button>
@@ -659,17 +886,17 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                   <button
                     type="submit"
                     disabled={geocoding || !locationInput.trim()}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-green-600 text-white px-3 sm:px-6 py-2 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-green-600 text-white px-3 sm:px-6 py-2 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base hover:scale-105 active:scale-95 shadow-md hover:shadow-lg disabled:hover:scale-100 touch-manipulation min-w-[60px] min-h-[44px]"
                   >
-                    {geocoding ? 'Searching...' : 'Search'}
+                    {geocoding ? t('common.loading') : t('common.search')}
                   </button>
                 </div>
               </form>
 
-              {/* Max Distance Filter */}
+              {/* Max Distance Filter (Legacy - kept for backward compatibility) */}
               <div className="w-full">
                 <label htmlFor="maxDistance" className="block text-sm font-medium text-white mb-2">
-                  Max Distance
+                  {t('home.maxDistance')}
                 </label>
                 <select
                   id="maxDistance"
@@ -677,22 +904,32 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                   onChange={(e) => setMaxDistance(e.target.value)}
                   className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm transition-all bg-white"
                 >
-                  <option value="all">All</option>
-                  <option value="5">5 km</option>
-                  <option value="10">10 km</option>
-                  <option value="25">25 km</option>
+                  <option value="all">{t('home.all')}</option>
+                  <option value="5">5 {t('home.km')}</option>
+                  <option value="10">10 {t('home.km')}</option>
+                  <option value="25">25 {t('home.km')}</option>
                 </select>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Loading State */}
+        {/* Advanced Search Filters */}
+        <SearchFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          isOpen={filtersOpen}
+          onToggle={() => setFiltersOpen(!filtersOpen)}
+          resultCount={sortedProfessionals.length}
+        />
+
+        {/* Loading State - Skeleton Screens */}
         {loading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-4"></div>
-              <p className="text-white">Loading professionals...</p>
+          <div className="mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <ProfessionalCardSkeleton key={i} />
+              ))}
             </div>
           </div>
         )}
@@ -753,9 +990,9 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
               </h3>
             </div>
 
-            {/* Results Grid */}
+            {/* Results Grid - Mobile Optimized */}
             {sortedProfessionals.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pb-4">
                 {sortedProfessionals.map((professional) => (
                   <ProfessionalCard
                     key={professional.id}
@@ -773,12 +1010,12 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                   {searchQuery || locationInput ? '🔍' : '👷'}
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  {searchQuery || locationInput ? 'No Professionals Found' : 'No Professionals Available Yet'}
+                  {searchQuery || locationInput ? t('home.noResults') : t('home.noResults')}
                 </h3>
                 <p className="text-gray-600 mb-4 max-w-md mx-auto">
                   {searchQuery || locationInput ? (
                     <>
-                      We couldn't find any professionals matching your search.
+                      {t('home.tryDifferentSearch')}
                       {searchQuery && (
                         <span className="block mt-2">
                           Search: <span className="font-semibold">"{searchQuery}"</span>
@@ -874,11 +1111,25 @@ function App() {
     };
 
     // Set up auth state listener
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         // Set user context in Sentry for error tracking
         setSentryUser(currentUser);
+
+        // Process referral code if present in URL
+        const referralCode = getReferralCodeFromURL();
+        if (referralCode) {
+          try {
+            await processReferralCode(currentUser.uid, referralCode);
+            // Clean up URL parameter
+            const url = new URL(window.location.href);
+            url.searchParams.delete('ref');
+            window.history.replaceState({}, '', url);
+          } catch (error) {
+            console.error('Error processing referral code:', error);
+          }
+        }
       } else {
         // Clear user context when logged out
         setSentryUser(null);
@@ -893,6 +1144,13 @@ function App() {
   }, []);
 
   // Search is now handled in HomePage component
+
+  // Preload critical routes after authentication
+  useEffect(() => {
+    if (user && !loading) {
+      preloadCriticalRoutes();
+    }
+  }, [user, loading]);
 
   // Show loading screen until authentication is ready
   if (loading || !user) {
@@ -911,27 +1169,124 @@ function App() {
       <LoadingProvider>
         <Router>
           <div className="min-h-screen bg-blue-900">
-            <Routes>
-              <Route
-                path="/"
-                element={
-                  <HomePage
-                    user={user}
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                  />
-                }
-              />
-              <Route path="/pro-onboarding" element={<ProOnboarding />} />
-              <Route path="/pro-details/:id" element={<ProfessionalDetails />} />
-              <Route path="/book/:id" element={<BookingPage />} />
-              <Route path="/pro-dashboard" element={<ProDashboard />} />
-              <Route path="/chat/:bookingId" element={<ChatPage />} />
-          <Route path="/my-messages" element={<MyMessages />} />
-          <Route path="/my-bookings" element={<MyBookings />} />
-          <Route path="/my-favorites" element={<MyFavorites />} />
-          <Route path="/admin-dashboard" element={<AdminDashboard />} />
-            </Routes>
+            <Suspense fallback={<RouteLoading message="Loading page..." />}>
+              <Routes>
+                <Route
+                  path="/"
+                  element={
+                    <HomePage
+                      user={user}
+                      searchQuery={searchQuery}
+                      setSearchQuery={setSearchQuery}
+                    />
+                  }
+                />
+                <Route 
+                  path="/pro-onboarding" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading onboarding..." />}>
+                      <ProOnboarding />
+                    </Suspense>
+                  } 
+                />
+                <Route 
+                  path="/pro-details/:id" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading professional details..." />}>
+                      <ProfessionalDetails />
+                    </Suspense>
+                  } 
+                />
+                <Route 
+                  path="/book/:id" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading booking page..." />}>
+                      <BookingPage />
+                    </Suspense>
+                  } 
+                />
+                <Route 
+                  path="/pro-dashboard" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading dashboard..." />}>
+                      <ProDashboard />
+                    </Suspense>
+                  } 
+                />
+                <Route 
+                  path="/chat/:bookingId" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading chat..." />}>
+                      <ChatPage />
+                    </Suspense>
+                  } 
+                />
+                <Route 
+                  path="/my-messages" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading messages..." />}>
+                      <MyMessages />
+                    </Suspense>
+                  } 
+                />
+                <Route 
+                  path="/my-bookings" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading bookings..." />}>
+                      <MyBookings />
+                    </Suspense>
+                  } 
+                />
+                <Route 
+                  path="/my-favorites" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading favorites..." />}>
+                      <MyFavorites />
+                    </Suspense>
+                  } 
+                />
+                <Route
+                  path="/my-profile"
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading profile..." />}>
+                      <MyProfile />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading dashboard..." />}>
+                      <CustomerDashboard />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/admin-dashboard" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading admin dashboard..." />}>
+                      <AdminDashboard />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/admin-disputes" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading dispute dashboard..." />}>
+                      <AdminDisputeDashboard />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/my-disputes" 
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading disputes..." />}>
+                      <MyDisputes />
+                    </Suspense>
+                  }
+                />
+              </Routes>
+            </Suspense>
           </div>
         </Router>
       </LoadingProvider>

@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db, appId } from './firebase';
 import { setDoc, doc } from 'firebase/firestore';
-import AvailabilitySchedule from './components/AvailabilitySchedule';
 import { mockGeocode } from './utils/geocoding';
 import { useToast } from './context/ToastContext';
 import { useLoading } from './context/LoadingContext';
+import { Skeleton } from './components/Skeleton';
+import ServiceAreaMap from './components/maps/ServiceAreaMap';
+import MultiAreaManager from './components/maps/MultiAreaManager';
+import LanguageTags from './components/LanguageTags';
+import { useTranslation } from 'react-i18next';
+
+// Lazy load AvailabilitySchedule component (only needed on step 6)
+const AvailabilitySchedule = lazy(() => import('./components/AvailabilitySchedule'));
 
 // Mock service types data
 const SERVICE_TYPES = [
@@ -26,6 +33,7 @@ function ProOnboarding() {
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
   const { withLoading } = useLoading();
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
@@ -42,7 +50,12 @@ function ProOnboarding() {
     location: '',
     bio: '',
     calendarLink: '',
+    serviceRadius: 25, // Default service radius in km
   });
+  const [locationCoordinates, setLocationCoordinates] = useState(null);
+  const [serviceAreas, setServiceAreas] = useState([]); // Multi-area support
+  const [useMultiArea, setUseMultiArea] = useState(false);
+  const [languages, setLanguages] = useState([]); // Languages spoken
 
     // Test Firestore connection on mount (removed debug logs)
 
@@ -99,6 +112,11 @@ function ProOnboarding() {
       ...prev,
       [name]: value,
     }));
+
+    // If location changes, clear locationCoordinates to trigger re-geocoding
+    if (name === 'location') {
+      setLocationCoordinates(null);
+    }
 
     // Validate the field in real-time and clear error if valid
     let errorMessage = '';
@@ -248,6 +266,29 @@ function ProOnboarding() {
       if (coordinates) {
         professionalData.lat = coordinates.lat;
         professionalData.lon = coordinates.lon;
+      }
+
+      // Add service radius if set
+      if (data.serviceRadius) {
+        professionalData.serviceRadius = data.serviceRadius;
+      }
+
+      // Use locationCoordinates if available (from map interaction)
+      if (locationCoordinates) {
+        professionalData.lat = locationCoordinates.lat;
+        professionalData.lon = locationCoordinates.lon;
+      }
+
+      // Add multi-area support if enabled
+      if (useMultiArea && serviceAreas.length > 0) {
+        professionalData.serviceAreas = serviceAreas;
+        // Set primary location to first area for backward compatibility
+        if (serviceAreas[0]) {
+          professionalData.lat = serviceAreas[0].lat;
+          professionalData.lon = serviceAreas[0].lon;
+          professionalData.locationText = serviceAreas[0].locationText;
+          professionalData.serviceRadius = serviceAreas[0].serviceRadius;
+        }
       }
 
       // Save to Firestore with shorter timeout and better error handling
@@ -434,35 +475,115 @@ function ProOnboarding() {
       case 3:
         return (
           <div className="space-y-6">
-            <div>
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
-                Location / Service Area <span className="text-red-500">*</span>
+            {/* Multi-Area Toggle */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useMultiArea}
+                  onChange={(e) => setUseMultiArea(e.target.checked)}
+                  className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <span className="ml-3 text-sm font-medium text-gray-900">
+                  I serve multiple locations
+                </span>
               </label>
-              <input
-                type="text"
-                id="location"
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                placeholder="e.g., Greater Seattle Area, WA"
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg ${
-                  fieldErrors.location
-                    ? 'border-red-500 bg-red-50'
-                    : 'border-gray-300'
-                }`}
-                required
-              />
-              {fieldErrors.location ? (
-                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                  <span>⚠</span>
-                  <span>{fieldErrors.location}</span>
-                </p>
-              ) : (
-                <p className="mt-2 text-sm text-gray-500">
-                  Describe the area where you provide services
-                </p>
-              )}
+              <p className="text-xs text-gray-600 mt-2 ml-8">
+                Enable this if you provide services in multiple areas
+              </p>
             </div>
+
+            {useMultiArea ? (
+              /* Multi-Area Manager */
+              <MultiAreaManager
+                areas={serviceAreas}
+                onAreasChange={setServiceAreas}
+              />
+            ) : (
+              /* Single Area Setup */
+              <>
+                <div>
+                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
+                    Location / Service Area <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    placeholder="e.g., Miami, FL or Greater Seattle Area, WA"
+                    className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg ${
+                      fieldErrors.location
+                        ? 'border-red-500 bg-red-50'
+                        : 'border-gray-300'
+                    }`}
+                    required
+                  />
+                  {fieldErrors.location ? (
+                    <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                      <span>⚠</span>
+                      <span>{fieldErrors.location}</span>
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-500">
+                      Enter your location to visualize your service area on the map
+                    </p>
+                  )}
+                </div>
+
+                {/* Service Area Map */}
+                {formData.location && (
+                  <div className="mt-6">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!formData.location.trim()) return;
+                        setGeocoding(true);
+                        try {
+                          const coords = await mockGeocode(formData.location);
+                          if (coords) {
+                            const newLocation = {
+                              lat: coords.lat,
+                              lon: coords.lon,
+                              locationText: formData.location
+                            };
+                            setLocationCoordinates(newLocation);
+                            showSuccess('Location found on map!');
+                          }
+                        } catch (error) {
+                          console.error('Geocoding error:', error);
+                        } finally {
+                          setGeocoding(false);
+                        }
+                      }}
+                      disabled={geocoding || !formData.location.trim()}
+                      className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                    >
+                      {geocoding ? 'Locating...' : '📍 Find on Map'}
+                    </button>
+                    <ServiceAreaMap
+                      initialLocation={locationCoordinates || (formData.location ? {
+                        lat: 25.7617,
+                        lon: -80.1918,
+                        locationText: formData.location
+                      } : null)}
+                      serviceRadius={formData.serviceRadius}
+                      onLocationChange={(newLocation) => {
+                        setLocationCoordinates(newLocation);
+                        setFormData(prev => ({ ...prev, location: newLocation.locationText }));
+                      }}
+                      onRadiusChange={(newRadius) => {
+                        setFormData(prev => ({ ...prev, serviceRadius: newRadius }));
+                      }}
+                      readOnly={false}
+                      showRadius={true}
+                      height="350px"
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         );
 
@@ -515,7 +636,16 @@ function ProOnboarding() {
         );
 
       case 5:
-        return <AvailabilitySchedule />;
+        return (
+          <Suspense fallback={
+            <div className="space-y-4">
+              <Skeleton variant="text" lines={2} className="h-8" />
+              <Skeleton variant="card" />
+            </div>
+          }>
+            <AvailabilitySchedule />
+          </Suspense>
+        );
 
       default:
         return null;

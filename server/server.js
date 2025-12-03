@@ -189,8 +189,70 @@ async function handlePaymentFailure(paymentIntent) {
   }
 }
 
+/**
+ * Send Email
+ * POST /api/send-email
+ * Body: { to, subject, html, text? }
+ */
+app.post('/api/send-email', async (req, res) => {
+  try {
+    const { to, subject, html, text } = req.body;
+
+    if (!to || !subject || !html) {
+      return res.status(400).json({ error: 'Missing required fields: to, subject, html' });
+    }
+
+    // Mock implementation - Replace with actual email service
+    // For production, use SendGrid, Nodemailer, or similar
+    console.log('📧 Email would be sent:', { to, subject });
+    
+    // TODO: Implement actual email sending
+    // Example with SendGrid:
+    // const sgMail = require('@sendgrid/mail');
+    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    // await sgMail.send({ to, from: 'noreply@expertnextdoor.com', subject, html, text });
+
+    res.json({ success: true, message: 'Email sent successfully (mock)' });
+  } catch (error) {
+    console.error('Error sending email:', error);
+    res.status(500).json({ error: 'Failed to send email', details: error.message });
+  }
+});
+
+/**
+ * Send SMS
+ * POST /api/send-sms
+ * Body: { to, message }
+ */
+app.post('/api/send-sms', async (req, res) => {
+  try {
+    const { to, message } = req.body;
+
+    if (!to || !message) {
+      return res.status(400).json({ error: 'Missing required fields: to, message' });
+    }
+
+    // Mock implementation - Replace with actual SMS service
+    // For production, use Twilio, AWS SNS, or similar
+    console.log('📱 SMS would be sent:', { to, message });
+    
+    // TODO: Implement actual SMS sending
+    // Example with Twilio:
+    // const twilio = require('twilio');
+    // const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    // await client.messages.create({ body: message, from: process.env.TWILIO_PHONE_NUMBER, to });
+
+    res.json({ success: true, message: 'SMS sent successfully (mock)' });
+  } catch (error) {
+    console.error('Error sending SMS:', error);
+    res.status(500).json({ error: 'Failed to send SMS', details: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Payment API server running on port ${PORT}`);
   console.log(`Stripe configured: ${stripe ? 'Yes' : 'No'}`);
+  console.log('📧 Email endpoint: POST /api/send-email');
+  console.log('📱 SMS endpoint: POST /api/send-sms');
 });

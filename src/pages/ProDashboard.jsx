@@ -3,8 +3,24 @@ import { useNavigate, Link } from 'react-router-dom';
 import { auth, db, appId } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, updateDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { sendConfirmationNotification, sendCancellationNotification, sendCompletionNotification } from '../utils/notifications';
+import { updateReferralOnBookingCompletion } from '../utils/referral';
 import { useToast } from '../context/ToastContext';
 import { useLoading } from '../context/LoadingContext';
+import EarningsCard from '../components/analytics/EarningsCard';
+import BookingTrendsChart from '../components/analytics/BookingTrendsChart';
+import CustomerInsights from '../components/analytics/CustomerInsights';
+import AvailabilityAnalytics from '../components/analytics/AvailabilityAnalytics';
+import PortfolioGallery from '../components/portfolio/PortfolioGallery';
+import ServicePackages from '../components/packages/ServicePackages';
+import DocumentSharing from '../components/documents/DocumentSharing';
+import AdvancedAvailabilityManager from '../components/AdvancedAvailabilityManager';
+import {
+  calculateEarnings,
+  calculateBookingTrends,
+  calculateCustomerInsights,
+  calculateAvailabilityAnalytics,
+  fetchProfessionalReviews,
+} from '../utils/analytics';
 
 function ProDashboard() {
   const navigate = useNavigate();
@@ -14,6 +30,28 @@ function ProDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
+  const [selectedBookingForDocuments, setSelectedBookingForDocuments] = useState(null);
+  
+  // Analytics state
+  const [professionalData, setProfessionalData] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [analytics, setAnalytics] = useState({
+    earnings: { total: 0, monthly: 0, growth: null },
+    trends: [],
+    customerInsights: {
+      totalCustomers: 0,
+      repeatCustomers: 0,
+      averageRating: 0,
+      totalReviews: 0,
+      topCustomers: [],
+    },
+    availability: {
+      peakDays: [],
+      peakHours: [],
+      totalBookings: 0,
+      averageBookingsPerDay: 0,
+    },
+  });
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -309,6 +347,18 @@ function ProDashboard() {
                 serviceType: professionalData?.serviceType,
               }
             );
+
+            // Update referral status if this is the user's first completed booking
+            try {
+              await updateReferralOnBookingCompletion({
+                id: bookingId,
+                userId: bookingData.userId,
+                status: 'Completed',
+              });
+            } catch (referralError) {
+              console.error('Error updating referral:', referralError);
+              // Don't fail the booking completion if referral update fails
+            }
           } catch (notifError) {
             console.error('Error sending completion notification:', notifError);
             // Don't fail the booking completion if notification fails
@@ -383,7 +433,7 @@ function ProDashboard() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
             </div>
           </div>
@@ -404,7 +454,7 @@ function ProDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              Customer Portal
+              ExpertNextDoor
             </Link>
             <div className="flex items-center space-x-4">
               <Link
@@ -443,6 +493,45 @@ function ProDashboard() {
             </div>
           </div>
         )}
+
+        {/* Analytics Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Analytics & Insights</h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Earnings Card */}
+            <EarningsCard
+              earnings={analytics.earnings.total}
+              monthlyEarnings={analytics.earnings.monthly}
+              growth={analytics.earnings.growth}
+            />
+
+            {/* Customer Insights */}
+            <CustomerInsights
+              totalCustomers={analytics.customerInsights.totalCustomers}
+              repeatCustomers={analytics.customerInsights.repeatCustomers}
+              averageRating={analytics.customerInsights.averageRating}
+              totalReviews={analytics.customerInsights.totalReviews}
+              topCustomers={analytics.customerInsights.topCustomers}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Booking Trends */}
+            <BookingTrendsChart
+              data={analytics.trends}
+              period="week"
+            />
+
+            {/* Availability Analytics */}
+            <AvailabilityAnalytics
+              peakDays={analytics.availability.peakDays}
+              peakHours={analytics.availability.peakHours}
+              totalBookings={analytics.availability.totalBookings}
+              averageBookingsPerDay={analytics.availability.averageBookingsPerDay}
+            />
+          </div>
+        </div>
 
         {/* Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -546,13 +635,94 @@ function ProDashboard() {
             </div>
           </div>
         )}
+
+        {/* Service Packages Management */}
+        {auth.currentUser && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Service Packages</h2>
+            <p className="text-gray-600 mb-6">
+              Create fixed-price service packages to offer customers. Packages can include add-on services and discounts.
+            </p>
+            <ServicePackages 
+              professionalId={auth.currentUser.uid} 
+              isOwner={true}
+            />
+          </div>
+        )}
+
+        {/* Document Sharing */}
+        {auth.currentUser && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Document Sharing</h2>
+            <p className="text-gray-600 mb-6">
+              Upload and share documents with customers. Share quotes, estimates, contracts, and other important files.
+            </p>
+            <DocumentSharing 
+              professionalId={auth.currentUser.uid} 
+              isOwner={true}
+            />
+          </div>
+        )}
+
+        {/* Portfolio Management */}
+        {auth.currentUser && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Portfolio Gallery</h2>
+            <p className="text-gray-600 mb-6">
+              Showcase your work with photos. Upload before/after photos, completed projects, and work samples to attract more customers.
+            </p>
+            <PortfolioGallery 
+              professionalId={auth.currentUser.uid} 
+              isOwner={true}
+            />
+          </div>
+        )}
+
+        {/* Advanced Availability Management */}
+        {auth.currentUser && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Advanced Availability Settings</h2>
+            <p className="text-gray-600 mb-6">
+              Manage blocked dates, vacation mode, buffer times, and auto-decline settings to control when customers can book your services.
+            </p>
+            <AdvancedAvailabilityManager />
+          </div>
+        )}
+
+        {/* Booking Documents Modal */}
+        {selectedBookingForDocuments && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedBookingForDocuments(null)}>
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                <h2 className="text-2xl font-semibold text-gray-900">Booking Documents</h2>
+                <button
+                  onClick={() => setSelectedBookingForDocuments(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-6">
+                <DocumentSharing
+                  professionalId={auth.currentUser.uid}
+                  bookingId={selectedBookingForDocuments.id}
+                  isOwner={true}
+                  customerId={selectedBookingForDocuments.userId}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );
 }
 
 // Booking Card Component
-function BookingCard({ booking, onConfirm, onDecline, onComplete, updating = false, formatDate, formatTime, getStatusColor }) {
+function BookingCard({ booking, onConfirm, onDecline, onComplete, onViewDocuments, updating = false, formatDate, formatTime, getStatusColor }) {
   const isPending = booking.status === 'Pending';
   const isConfirmed = booking.status === 'Confirmed';
   const isPendingOrConfirmed = booking.status === 'Pending' || booking.status === 'Confirmed';
@@ -609,10 +779,20 @@ function BookingCard({ booking, onConfirm, onDecline, onComplete, updating = fal
           {isPendingOrConfirmed && (
             <Link
               to={`/chat/${booking.id}`}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium text-center whitespace-nowrap"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium text-center whitespace-nowrap shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
             >
               Message
             </Link>
+          )}
+
+          {/* Documents Button - Show for all bookings */}
+          {onViewDocuments && (
+            <button
+              onClick={onViewDocuments}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 font-medium whitespace-nowrap shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+            >
+              📄 Documents
+            </button>
           )}
 
           {/* Complete Button for Confirmed Bookings */}
@@ -620,7 +800,7 @@ function BookingCard({ booking, onConfirm, onDecline, onComplete, updating = fal
             <button
               onClick={onComplete}
               disabled={updating}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 disabled:hover:scale-100"
             >
               {updating ? 'Updating...' : 'Complete'}
             </button>
@@ -639,7 +819,7 @@ function BookingCard({ booking, onConfirm, onDecline, onComplete, updating = fal
               <button
                 onClick={onDecline}
                 disabled={updating}
-                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 disabled:hover:scale-100"
               >
                 {updating ? 'Updating...' : 'Decline'}
               </button>

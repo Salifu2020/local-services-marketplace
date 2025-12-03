@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { auth, db, appId } from '../firebase';
 import { doc, getDoc, setDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { ChatMessageSkeleton, Skeleton } from '../components/Skeleton';
 
 function ChatPage() {
   const { bookingId } = useParams();
@@ -341,17 +342,26 @@ function ChatPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
             </div>
           </div>
         </nav>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading chat...</p>
+        <main className="max-w-4xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
+          <div className="bg-white rounded-lg shadow-md h-[calc(100vh-10rem)] sm:h-[calc(100vh-12rem)] flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <Skeleton variant="text" lines={2} className="h-6" />
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <ChatMessageSkeleton key={i} />
+              ))}
+            </div>
+            <div className="p-3 sm:p-4 border-t border-gray-200">
+              <Skeleton variant="button" className="h-12 w-full" />
+            </div>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -363,7 +373,7 @@ function ChatPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
             </div>
           </div>
@@ -394,7 +404,7 @@ function ChatPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              Customer Portal
+              ExpertNextDoor
             </Link>
             <div className="flex items-center space-x-4">
               <Link

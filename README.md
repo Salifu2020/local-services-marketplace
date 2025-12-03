@@ -1,6 +1,6 @@
-# Local Services Marketplace - Customer Portal
+# ExpertNextDoor
 
-A modern, full-stack React application for connecting customers with local service professionals. Built with React, Firebase, and Tailwind CSS.
+A modern, full-stack React application for connecting customers with local service professionals. Find experts in your neighborhood with ExpertNextDoor. Built with React, Firebase, and Tailwind CSS.
 
 ## 🚀 Technology Stack
 

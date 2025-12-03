@@ -83,10 +83,10 @@ function Toast({ toast, onRemove }) {
 
   return (
     <div
-      className={`${bgColor} border-2 rounded-lg shadow-lg p-4 flex items-start gap-3 animate-slide-in-right`}
+      className={`${bgColor} border-2 rounded-lg shadow-lg p-4 flex items-start gap-3 animate-slide-in-right transition-all duration-300 hover:shadow-xl transform hover:scale-[1.02]`}
       role="alert"
     >
-      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-white flex items-center justify-center font-bold text-sm">
+      <div className={`flex-shrink-0 w-6 h-6 rounded-full bg-white flex items-center justify-center font-bold text-sm ${type === 'success' ? 'animate-checkmark' : ''}`}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">

@@ -41,11 +41,11 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 relative">
+    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-gray-200 relative transform hover:-translate-y-1 animate-fade-in">
       {/* Heart Icon */}
       <button
         onClick={handleFavoriteClick}
-        className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-10"
+        className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-all duration-200 z-10 transform hover:scale-110 active:scale-95"
         aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
       >
         <svg
@@ -129,7 +129,7 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
       
       <Link
         to={`/pro-details/${userId}`}
-        className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium text-center"
+        className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium text-center transform hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg"
       >
         View Profile
       </Link>

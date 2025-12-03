@@ -1,5 +1,8 @@
 import { db, appId } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { sendEmail, getBookingConfirmationEmail, getBookingReminderEmail, getPaymentReceiptEmail, getNewMessageEmail, getBookingCancellationEmail } from './emailService';
+import { sendSMS, getBookingConfirmationSMS, getBookingReminderSMS, getPaymentConfirmationSMS, getNewMessageSMS, getBookingCancellationSMS, formatPhoneNumber } from './smsService';
+import { shouldSendEmail, shouldSendSMS, getUserEmail, getUserPhone } from './notificationPreferences';
 
 /**
  * Send a notification to a user
@@ -54,7 +57,7 @@ export async function sendNotification(userId, message, type, relatedId = null, 
  * @returns {Promise<string>} Notification document ID
  */
 export async function sendConfirmationNotification(userId, bookingId, bookingData = {}) {
-  const { date, time, professionalName, serviceType } = bookingData;
+  const { date, time, professionalName, serviceType, customerName, location, notes, duration } = bookingData;
   
   let message = 'Your booking has been confirmed!';
   
@@ -77,7 +80,8 @@ export async function sendConfirmationNotification(userId, bookingId, bookingDat
     message = `Your booking${professionalName ? ` with ${professionalName}` : ''} has been confirmed for ${dateStr} at ${timeStr}`;
   }
 
-  return sendNotification(
+  // Send in-app notification
+  const notificationId = await sendNotification(
     userId,
     message,
     'BOOKING_CONFIRMED',
@@ -89,6 +93,51 @@ export async function sendConfirmationNotification(userId, bookingId, bookingDat
       serviceType: serviceType || null,
     }
   );
+
+  // Send email if user has email notifications enabled
+  try {
+    if (await shouldSendEmail(userId, 'bookingConfirmations')) {
+      const email = await getUserEmail(userId);
+      if (email) {
+        const emailBody = getBookingConfirmationEmail({
+          customerName,
+          professionalName,
+          serviceType,
+          date,
+          time,
+          duration,
+          location,
+          notes,
+        });
+        await sendEmail(email, 'Booking Confirmed - ExpertNextDoor', emailBody);
+      }
+    }
+  } catch (error) {
+    console.error('Error sending confirmation email:', error);
+  }
+
+  // Send SMS if user has SMS notifications enabled
+  try {
+    if (await shouldSendSMS(userId, 'bookingConfirmations')) {
+      const phone = await getUserPhone(userId);
+      if (phone) {
+        const smsMessage = getBookingConfirmationSMS({
+          professionalName,
+          serviceType,
+          date,
+          time,
+        });
+        const formattedPhone = formatPhoneNumber(phone);
+        if (formattedPhone) {
+          await sendSMS(formattedPhone, smsMessage);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error sending confirmation SMS:', error);
+  }
+
+  return notificationId;
 }
 
 /**
@@ -99,7 +148,7 @@ export async function sendConfirmationNotification(userId, bookingId, bookingDat
  * @returns {Promise<string>} Notification document ID
  */
 export async function sendCancellationNotification(userId, bookingId, bookingData = {}) {
-  const { date, time, professionalName } = bookingData;
+  const { date, time, professionalName, serviceType, customerName, reason } = bookingData;
   
   let message = 'Your booking has been cancelled.';
   
@@ -107,7 +156,8 @@ export async function sendCancellationNotification(userId, bookingId, bookingDat
     message = `Your booking with ${professionalName} has been cancelled.`;
   }
 
-  return sendNotification(
+  // Send in-app notification
+  const notificationId = await sendNotification(
     userId,
     message,
     'BOOKING_CANCELLED',
@@ -118,6 +168,48 @@ export async function sendCancellationNotification(userId, bookingId, bookingDat
       professionalName: professionalName || null,
     }
   );
+
+  // Send email if user has email notifications enabled
+  try {
+    if (await shouldSendEmail(userId, 'bookingCancellations')) {
+      const email = await getUserEmail(userId);
+      if (email) {
+        const emailBody = getBookingCancellationEmail({
+          customerName,
+          professionalName,
+          serviceType,
+          date,
+          time,
+          reason,
+        });
+        await sendEmail(email, 'Booking Cancelled - ExpertNextDoor', emailBody);
+      }
+    }
+  } catch (error) {
+    console.error('Error sending cancellation email:', error);
+  }
+
+  // Send SMS if user has SMS notifications enabled
+  try {
+    if (await shouldSendSMS(userId, 'bookingCancellations')) {
+      const phone = await getUserPhone(userId);
+      if (phone) {
+        const smsMessage = getBookingCancellationSMS({
+          professionalName,
+          serviceType,
+          date,
+        });
+        const formattedPhone = formatPhoneNumber(phone);
+        if (formattedPhone) {
+          await sendSMS(formattedPhone, smsMessage);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error sending cancellation SMS:', error);
+  }
+
+  return notificationId;
 }
 
 /**
@@ -196,10 +288,11 @@ export async function sendPaymentReceivedNotification(proId, bookingId, bookingD
  * @param {string} senderName - Name of message sender
  * @returns {Promise<string>} Notification document ID
  */
-export async function sendNewMessageNotification(userId, bookingId, senderName = 'Someone') {
+export async function sendNewMessageNotification(userId, bookingId, senderName = 'Someone', messagePreview = null) {
   const message = `You have a new message from ${senderName}`;
   
-  return sendNotification(
+  // Send in-app notification
+  const notificationId = await sendNotification(
     userId,
     message,
     'NEW_MESSAGE',
@@ -208,6 +301,45 @@ export async function sendNewMessageNotification(userId, bookingId, senderName =
       senderName: senderName,
     }
   );
+
+  // Send email if user has email notifications enabled
+  try {
+    if (await shouldSendEmail(userId, 'newMessages')) {
+      const email = await getUserEmail(userId);
+      if (email) {
+        const emailBody = getNewMessageEmail({
+          recipientName: null, // Could fetch from user data
+          senderName,
+          messagePreview: messagePreview || 'New message received',
+          bookingId,
+        });
+        await sendEmail(email, `New Message from ${senderName} - ExpertNextDoor`, emailBody);
+      }
+    }
+  } catch (error) {
+    console.error('Error sending message email:', error);
+  }
+
+  // Send SMS if user has SMS notifications enabled
+  try {
+    if (await shouldSendSMS(userId, 'newMessages')) {
+      const phone = await getUserPhone(userId);
+      if (phone) {
+        const smsMessage = getNewMessageSMS({
+          senderName,
+          messagePreview: messagePreview || 'New message received',
+        });
+        const formattedPhone = formatPhoneNumber(phone);
+        if (formattedPhone) {
+          await sendSMS(formattedPhone, smsMessage);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error sending message SMS:', error);
+  }
+
+  return notificationId;
 }
 
 /**

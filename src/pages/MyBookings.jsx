@@ -3,9 +3,18 @@ import { useNavigate, Link } from 'react-router-dom';
 import { auth, db, appId } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, updateDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { sendPaymentReceivedNotification } from '../utils/notifications';
+import { BookingCardSkeleton, Skeleton } from '../components/Skeleton';
+import StripePaymentModal from '../components/payment/StripePaymentModal';
+import RescheduleModal from '../components/booking/RescheduleModal';
+import CancelBookingModal from '../components/booking/CancelBookingModal';
+import { generateICal, downloadICal } from '../utils/ical';
+import DocumentSharing from '../components/documents/DocumentSharing';
+import DisputeForm from '../components/disputes/DisputeForm';
+import { useTranslation } from 'react-i18next';
 
 function MyBookings() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,6 +22,14 @@ function MyBookings() {
   const [paymentSuccess, setPaymentSuccess] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [rescheduleBooking, setRescheduleBooking] = useState(null);
+  const [cancelBooking, setCancelBooking] = useState(null);
+  const [professionalForReschedule, setProfessionalForReschedule] = useState(null);
+  const [selectedBookingForDocuments, setSelectedBookingForDocuments] = useState(null);
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [selectedBookingForDispute, setSelectedBookingForDispute] = useState(null);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -153,10 +170,82 @@ function MyBookings() {
     }
   };
 
-  const handleConfirmPayment = async () => {
+  const handleConfirmPayment = async (paymentIntent) => {
     if (!selectedBooking) return;
+    
     setShowPaymentModal(false);
-    await handlePayNow(selectedBooking.id);
+    setProcessingPayment(selectedBooking.id);
+    setPaymentSuccess(null);
+
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // Get booking data
+      const bookingRef = doc(
+        db,
+        'artifacts',
+        appId,
+        'public',
+        'data',
+        'bookings',
+        selectedBooking.id
+      );
+
+      const bookingDoc = await getDoc(bookingRef);
+      const bookingData = bookingDoc.data();
+
+      // Update booking payment status
+      await updateDoc(bookingRef, {
+        paymentStatus: 'Paid',
+        paymentIntentId: paymentIntent?.id || null,
+        paidAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Send notification to professional
+      if (bookingData?.professionalId) {
+        try {
+          const userRef = doc(
+            db,
+            'artifacts',
+            appId,
+            'public',
+            'data',
+            'users',
+            user.uid
+          );
+          const userDoc = await getDoc(userRef);
+          const userData = userDoc.data();
+          
+          await sendPaymentReceivedNotification(
+            bookingData.professionalId,
+            selectedBooking.id,
+            {
+              date: bookingData.date,
+              time: bookingData.time,
+              customerName: userData?.name || null,
+              amount: bookingData.hourlyRate || null,
+            }
+          );
+        } catch (notifError) {
+          console.error('Error sending payment notification:', notifError);
+        }
+      }
+
+      setPaymentSuccess(selectedBooking.id);
+      setSelectedBooking(null);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setPaymentSuccess(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Error processing payment:', err);
+      setError('Failed to process payment. Please try again.');
+    } finally {
+      setProcessingPayment(null);
+    }
   };
 
   const formatDate = (date) => {
@@ -229,6 +318,101 @@ function MyBookings() {
     }
   };
 
+  // Handle reschedule
+  const handleReschedule = async (booking, newDate, newTime) => {
+    try {
+      const bookingRef = doc(
+        db,
+        'artifacts',
+        appId,
+        'public',
+        'data',
+        'bookings',
+        booking.id
+      );
+
+      const newDateObj = new Date(newDate);
+      newDateObj.setHours(0, 0, 0, 0);
+
+      await updateDoc(bookingRef, {
+        date: newDateObj,
+        time: newTime,
+        status: 'Pending', // Reset to pending for professional approval
+        updatedAt: serverTimestamp(),
+        rescheduledAt: serverTimestamp(),
+        rescheduledFrom: {
+          date: booking.date,
+          time: booking.time,
+        },
+      });
+
+      setShowRescheduleModal(false);
+      setRescheduleBooking(null);
+      setProfessionalForReschedule(null);
+      setPaymentSuccess('rescheduled');
+      setTimeout(() => setPaymentSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error rescheduling booking:', err);
+      setError('Failed to reschedule booking. Please try again.');
+    }
+  };
+
+  // Handle cancel
+  const handleCancel = async (booking, reason) => {
+    try {
+      const bookingRef = doc(
+        db,
+        'artifacts',
+        appId,
+        'public',
+        'data',
+        'bookings',
+        booking.id
+      );
+
+      await updateDoc(bookingRef, {
+        status: 'Cancelled',
+        cancelledAt: serverTimestamp(),
+        cancellationReason: reason,
+        updatedAt: serverTimestamp(),
+      });
+
+      setShowCancelModal(false);
+      setCancelBooking(null);
+      setPaymentSuccess('cancelled');
+      setTimeout(() => setPaymentSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error cancelling booking:', err);
+      setError('Failed to cancel booking. Please try again.');
+    }
+  };
+
+  // Handle iCal export
+  const handleExportICal = async (booking) => {
+    try {
+      const professionalRef = doc(
+        db,
+        'artifacts',
+        appId,
+        'public',
+        'data',
+        'professionals',
+        booking.professionalId
+      );
+      const professionalDoc = await getDoc(professionalRef);
+      const professional = professionalDoc.exists() ? professionalDoc.data() : {};
+
+      const icalContent = generateICal(booking, professional);
+      const dateStr = booking.date?.toDate 
+        ? booking.date.toDate().toISOString().split('T')[0]
+        : new Date(booking.date).toISOString().split('T')[0];
+      downloadICal(icalContent, `booking-${dateStr}.ics`);
+    } catch (err) {
+      console.error('Error exporting iCal:', err);
+      setError('Failed to export calendar file.');
+    }
+  };
+
   if (loading) {
     return (
       <>
@@ -236,17 +420,21 @@ function MyBookings() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="text-xl font-bold text-gray-900">
-                Customer Portal
+                ExpertNextDoor
               </Link>
             </div>
           </div>
         </nav>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading your bookings...</p>
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <Skeleton variant="text" lines={2} className="h-8 mb-2" />
           </div>
-        </div>
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <BookingCardSkeleton key={i} />
+            ))}
+          </div>
+        </main>
       </>
     );
   }
@@ -257,7 +445,7 @@ function MyBookings() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              Customer Portal
+              ExpertNextDoor
             </Link>
             <div className="flex items-center space-x-4">
               <Link
@@ -282,7 +470,10 @@ function MyBookings() {
         {paymentSuccess && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-green-800 font-medium">
-              ✓ Payment processed successfully! Thank you for your payment.
+              {paymentSuccess === 'rescheduled' && '✓ Booking rescheduled successfully!'}
+              {paymentSuccess === 'cancelled' && '✓ Booking cancelled successfully.'}
+              {paymentSuccess !== 'rescheduled' && paymentSuccess !== 'cancelled' && 
+                '✓ Payment processed successfully! Thank you for your payment.'}
             </p>
           </div>
         )}
@@ -309,15 +500,15 @@ function MyBookings() {
         {/* Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-            <p className="text-sm text-gray-500 mb-1">Upcoming</p>
+            <p className="text-sm text-gray-500 mb-1">{t('bookings.upcoming')}</p>
             <p className="text-3xl font-bold text-blue-600">{upcomingBookings.length}</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-            <p className="text-sm text-gray-500 mb-1">Past Jobs</p>
+            <p className="text-sm text-gray-500 mb-1">{t('bookings.pastJobs')}</p>
             <p className="text-3xl font-bold text-gray-600">{pastJobs.length}</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-            <p className="text-sm text-gray-500 mb-1">Total</p>
+            <p className="text-sm text-gray-500 mb-1">{t('bookings.total')}</p>
             <p className="text-3xl font-bold text-gray-900">{bookings.length}</p>
           </div>
         </div>
@@ -325,13 +516,40 @@ function MyBookings() {
         {/* Upcoming Bookings (Pending/Confirmed) */}
         {upcomingBookings.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Upcoming</h2>
-            <p className="text-sm text-gray-600 mb-4">Pending and confirmed appointments</p>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">{t('bookings.upcoming')}</h2>
+            <p className="text-sm text-gray-600 mb-4">{t('bookings.status.pending')} {t('common.and')} {t('bookings.status.confirmed')} {t('bookings.subtitle').toLowerCase()}</p>
             <div className="space-y-4">
               {upcomingBookings.map((booking) => (
                 <BookingCard
                   key={booking.id}
                   booking={booking}
+                  onReschedule={async () => {
+                    try {
+                      const professionalRef = doc(
+                        db,
+                        'artifacts',
+                        appId,
+                        'public',
+                        'data',
+                        'professionals',
+                        booking.professionalId
+                      );
+                      const professionalDoc = await getDoc(professionalRef);
+                      if (professionalDoc.exists()) {
+                        setProfessionalForReschedule({ id: professionalDoc.id, ...professionalDoc.data() });
+                        setRescheduleBooking(booking);
+                        setShowRescheduleModal(true);
+                      }
+                    } catch (err) {
+                      console.error('Error fetching professional:', err);
+                      setError('Failed to load professional data for rescheduling.');
+                    }
+                  }}
+                  onCancel={() => {
+                    setCancelBooking(booking);
+                    setShowCancelModal(true);
+                  }}
+                  onExportICal={() => handleExportICal(booking)}
                   formatDate={formatDate}
                   formatTime={formatTime}
                   getStatusColor={getStatusColor}
@@ -345,8 +563,8 @@ function MyBookings() {
         {/* Past Jobs (Completed/Cancelled) */}
         {pastJobs.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Past Jobs</h2>
-            <p className="text-sm text-gray-600 mb-4">Completed and cancelled bookings</p>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">{t('bookings.pastJobs')}</h2>
+            <p className="text-sm text-gray-600 mb-4">{t('bookings.status.completed')} {t('common.and')} {t('bookings.status.cancelled')} {t('bookings.title').toLowerCase()}</p>
             <div className="space-y-4">
               {pastJobs.map((booking) => (
                 <BookingCard
@@ -354,6 +572,13 @@ function MyBookings() {
                   booking={booking}
                   onPayNow={booking.status === 'Completed' ? () => handlePayNow(booking.id, booking) : null}
                   onRebook={booking.status === 'Completed' ? () => handleRebook(booking.professionalId) : null}
+                  onExportICal={() => handleExportICal(booking)}
+                  onFileDispute={!booking.hasDispute ? () => {
+                    setSelectedBookingForDispute(booking);
+                    setShowDisputeForm(true);
+                  } : null}
+                  hasDispute={booking.hasDispute}
+                  disputeStatus={booking.disputeStatus}
                   processingPayment={processingPayment === booking.id}
                   formatDate={formatDate}
                   formatTime={formatTime}
@@ -387,9 +612,9 @@ function MyBookings() {
           </div>
         )}
 
-        {/* Payment Modal */}
+        {/* Stripe Payment Modal */}
         {showPaymentModal && selectedBooking && (
-          <PaymentModal
+          <StripePaymentModal
             booking={selectedBooking}
             onConfirm={handleConfirmPayment}
             onCancel={() => {
@@ -400,13 +625,56 @@ function MyBookings() {
             formatTime={formatTime}
           />
         )}
+
+        {/* Reschedule Modal */}
+        {showRescheduleModal && rescheduleBooking && professionalForReschedule && (
+          <RescheduleModal
+            booking={rescheduleBooking}
+            professional={professionalForReschedule}
+            onConfirm={(newDate, newTime) => handleReschedule(rescheduleBooking, newDate, newTime)}
+            onCancel={() => {
+              setShowRescheduleModal(false);
+              setRescheduleBooking(null);
+              setProfessionalForReschedule(null);
+            }}
+          />
+        )}
+
+        {/* Cancel Booking Modal */}
+        {showCancelModal && cancelBooking && (
+          <CancelBookingModal
+            booking={cancelBooking}
+            onConfirm={(reason) => handleCancel(cancelBooking, reason)}
+            onCancel={() => {
+              setShowCancelModal(false);
+              setCancelBooking(null);
+            }}
+          />
+        )}
+
+        {/* Dispute Form Modal */}
+        {showDisputeForm && selectedBookingForDispute && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <DisputeForm
+              booking={selectedBookingForDispute}
+              onClose={() => {
+                setShowDisputeForm(false);
+                setSelectedBookingForDispute(null);
+              }}
+              onSubmitted={() => {
+                setShowDisputeForm(false);
+                setSelectedBookingForDispute(null);
+              }}
+            />
+          </div>
+        )}
       </main>
     </>
   );
 }
 
 // Booking Card Component
-function BookingCard({ booking, onPayNow, onRebook, processingPayment = false, formatDate, formatTime, getStatusColor, getPaymentStatusColor }) {
+function BookingCard({ booking, onPayNow, onRebook, onReschedule, onCancel, onExportICal, onViewDocuments, onFileDispute, hasDispute, disputeStatus, processingPayment = false, formatDate, formatTime, getStatusColor, getPaymentStatusColor }) {
   const isCompleted = booking.status === 'Completed';
   const awaitingPayment = booking.paymentStatus === 'Awaiting Payment';
   const isPaid = booking.paymentStatus === 'Paid';
@@ -505,7 +773,7 @@ function BookingCard({ booking, onPayNow, onRebook, processingPayment = false, f
           {isCompleted && onRebook && (
             <button
               onClick={onRebook}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors font-medium whitespace-nowrap shadow-md hover:shadow-lg"
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 font-medium whitespace-nowrap shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
             >
               Rebook
             </button>
@@ -516,7 +784,7 @@ function BookingCard({ booking, onPayNow, onRebook, processingPayment = false, f
             <button
               onClick={onPayNow}
               disabled={processingPayment}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 disabled:hover:scale-100"
             >
               {processingPayment ? (
                 <span className="flex items-center gap-2">
@@ -536,6 +804,36 @@ function BookingCard({ booking, onPayNow, onRebook, processingPayment = false, f
             </div>
           )}
 
+          {/* Reschedule Button */}
+          {(booking.status === 'Pending' || booking.status === 'Confirmed') && onReschedule && (
+            <button
+              onClick={onReschedule}
+              className="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors font-medium whitespace-nowrap"
+            >
+              Reschedule
+            </button>
+          )}
+
+          {/* Cancel Button */}
+          {(booking.status === 'Pending' || booking.status === 'Confirmed') && onCancel && (
+            <button
+              onClick={onCancel}
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors font-medium whitespace-nowrap"
+            >
+              Cancel
+            </button>
+          )}
+
+          {/* Export iCal Button */}
+          {onExportICal && (
+            <button
+              onClick={onExportICal}
+              className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium whitespace-nowrap"
+            >
+              📅 Add to Calendar
+            </button>
+          )}
+
           {/* Message Button */}
           {(booking.status === 'Pending' || booking.status === 'Confirmed' || booking.status === 'Completed') && (
             <Link
@@ -544,6 +842,23 @@ function BookingCard({ booking, onPayNow, onRebook, processingPayment = false, f
             >
               Message
             </Link>
+          )}
+
+          {/* File Dispute Button */}
+          {onFileDispute && !hasDispute && (booking.status === 'Completed' || booking.status === 'Confirmed') && (
+            <button
+              onClick={onFileDispute}
+              className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors font-medium whitespace-nowrap"
+            >
+              ⚖️ File Dispute
+            </button>
+          )}
+
+          {/* Dispute Status */}
+          {hasDispute && (
+            <div className="px-6 py-2 bg-orange-100 text-orange-800 rounded-lg text-center font-medium whitespace-nowrap">
+              ⚖️ Dispute: {disputeStatus || 'Pending'}
+            </div>
           )}
         </div>
       </div>

@@ -132,9 +132,90 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // Referrals Collection - Referrer and referred user access
+    match /artifacts/{appId}/public/data/referrals/{referralId} {
+      // Allow read if user is the referrer or the referred user
+      allow read: if isAuthenticated() && (
+        resource.data.referrerId == request.auth.uid ||
+        resource.data.referredUserId == request.auth.uid
+      );
+      
+      // Allow create when processing a referral (user must be the referred user)
+      allow create: if isAuthenticated() && 
+                     request.resource.data.referredUserId == request.auth.uid;
+      
+      // Allow update if user is the referrer (for reward status updates)
+      // Note: In production, this should be done server-side
+      allow update: if isAuthenticated() && 
+                     resource.data.referrerId == request.auth.uid;
+      
+      // Users cannot delete referrals
+      allow delete: if false;
+    }
+    
+    // Professional Packages - Public read, owner write
+    match /artifacts/{appId}/public/data/professionals/{professionalId}/packages/{packageId} {
+      // Allow public read access
+      allow read: if true;
+      
+      // Only the professional can write to their own packages
+      allow create, update, delete: if isAuthenticated() && 
+                                     professionalId == request.auth.uid;
+    }
+    
+    // Professional Portfolio - Public read, owner write
+    match /artifacts/{appId}/public/data/professionals/{professionalId}/portfolio/{portfolioId} {
+      // Allow public read access
+      allow read: if true;
+      
+      // Only the professional can write to their own portfolio
+      allow create, update, delete: if isAuthenticated() && 
+                                      professionalId == request.auth.uid;
+    }
+    
+    // Disputes Collection - Participants and admin access
+    match /artifacts/{appId}/public/data/disputes/{disputeId} {
+      // Allow read if user is the customer, professional, or admin
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.professionalId == request.auth.uid ||
+        request.auth.uid == 'SdPQVpbeqGUq7F78FBcZ72MZV2I2' // Admin user ID
+      );
+      
+      // Allow create if user is the customer or professional involved in the booking
+      allow create: if isAuthenticated() && (
+        request.resource.data.filedBy == request.auth.uid &&
+        (request.resource.data.userId == request.auth.uid ||
+         request.resource.data.professionalId == request.auth.uid)
+      );
+      
+      // Allow update only by admin (for status changes and resolution)
+      allow update: if isAuthenticated() && 
+                     request.auth.uid == 'SdPQVpbeqGUq7F78FBcZ72MZV2I2'; // Admin user ID
+      
+      // Disputes cannot be deleted
+      allow delete: if false;
+    }
+    
     // ============================================
     // PRIVATE USER COLLECTIONS
     // ============================================
+    
+    // User Documents - Owner read/write, authenticated users can read for referral lookup
+    match /artifacts/{appId}/users/{userId} {
+      // Users can always read their own document
+      // Authenticated users can read other users' documents (needed for referral code lookup)
+      // Note: This allows reading the entire document, but referral codes are meant to be shareable
+      // In production, consider creating a separate public collection for referral code lookups
+      allow read: if isOwner(userId) || isAuthenticated();
+      
+      // Users can create/update their own document
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      
+      // Users cannot delete their own document (for data retention)
+      allow delete: if false;
+    }
     
     // User Notifications - Owner only
     match /artifacts/{appId}/users/{userId}/notifications/{notificationId} {

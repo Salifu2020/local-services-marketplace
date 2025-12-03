@@ -3,8 +3,17 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { auth, db, appId } from '../firebase';
 import { doc, getDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { useFavorites } from '../hooks/useFavorites';
+import { useSwipeBack } from '../hooks/useTouchGestures';
+import VerificationBadges, { CompactVerificationBadges } from '../components/VerificationBadges';
+import EnhancedReviewForm from '../components/reviews/EnhancedReviewForm';
+import EnhancedReviewsList from '../components/reviews/EnhancedReviewsList';
+import PortfolioGallery from '../components/portfolio/PortfolioGallery';
+import ServicePackages from '../components/packages/ServicePackages';
+import ServiceAreaMap from '../components/maps/ServiceAreaMap';
+import LanguageTags from '../components/LanguageTags';
+import { useTranslation } from 'react-i18next';
 
-// Star Rating Component
+// Star Rating Component (kept for backward compatibility)
 function StarRating({ rating, onRatingChange, interactive = false }) {
   return (
     <div className="flex items-center gap-1">
@@ -31,187 +40,11 @@ function StarRating({ rating, onRatingChange, interactive = false }) {
   );
 }
 
-// Review Form Component
-function ReviewForm({ professionalId, onReviewSubmitted }) {
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const user = auth.currentUser;
-    if (!user) {
-      setError('You must be logged in to submit a review');
-      return;
-    }
-
-    if (rating === 0) {
-      setError('Please select a rating');
-      return;
-    }
-
-    if (!comment.trim()) {
-      setError('Please write a comment');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      // Construct the reviews subcollection path
-      const reviewsRef = collection(
-        db,
-        'artifacts',
-        appId,
-        'public',
-        'data',
-        'professionals',
-        professionalId,
-        'reviews'
-      );
-
-      // Add the review
-      await addDoc(reviewsRef, {
-        userId: user.uid,
-        rating: rating,
-        comment: comment.trim(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      setSuccess(true);
-      setRating(0);
-      setComment('');
-      
-      // Notify parent component
-      if (onReviewSubmitted) {
-        onReviewSubmitted();
-      }
-
-      // Hide success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      console.error('Error submitting review:', err);
-      setError(err.message || 'Failed to submit review. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h3 className="text-xl font-semibold text-gray-900 mb-4">Write a Review</h3>
-      
-      {success && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-green-800 text-sm">✓ Review submitted successfully!</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800 text-sm">{error}</p>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Rating <span className="text-red-500">*</span>
-          </label>
-          <StarRating rating={rating} onRatingChange={setRating} interactive={true} />
-          {rating > 0 && (
-            <p className="text-sm text-gray-500 mt-1">
-              {rating} out of 5 stars
-            </p>
-          )}
-        </div>
-
-        <div className="mb-4">
-          <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-2">
-            Your Review <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            id="comment"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            rows={4}
-            placeholder="Share your experience with this professional..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            {comment.length} characters
-          </p>
-        </div>
-
-        <button
-          type="submit"
-          disabled={submitting || rating === 0 || !comment.trim()}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {submitting ? 'Submitting...' : 'Submit Review'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// Reviews List Component
-function ReviewsList({ reviews }) {
-  if (reviews.length === 0) {
-    return (
-      <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="text-4xl mb-3">⭐</div>
-        <p className="text-gray-600 font-medium mb-1">No reviews yet</p>
-        <p className="text-sm text-gray-500">Be the first to review this professional!</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {reviews.map((review) => (
-        <div key={review.id} className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                {review.userId ? review.userId.substring(0, 2).toUpperCase() : 'U'}
-              </div>
-              <div>
-                <p className="font-medium text-gray-900">
-                  {review.userId ? `User ${review.userId.substring(0, 8)}...` : 'Anonymous'}
-                </p>
-                {review.createdAt && (
-                  <p className="text-sm text-gray-500">
-                    {review.createdAt.toDate
-                      ? review.createdAt.toDate().toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'Recently'}
-                  </p>
-                )}
-              </div>
-            </div>
-            <StarRating rating={review.rating} interactive={false} />
-          </div>
-          <p className="text-gray-700 whitespace-pre-wrap">{review.comment}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ProfessionalDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toggleFavorite, isFavorite } = useFavorites();
+  const { t } = useTranslation();
   const [professional, setProfessional] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -220,6 +53,9 @@ function ProfessionalDetails() {
   const [reviewsLoading, setReviewsLoading] = useState(true);
 
   const isFav = isFavorite(id);
+  
+  // Swipe-to-go-back gesture for mobile
+  const { elementRef: swipeRef } = useSwipeBack();
 
   const handleFavoriteClick = () => {
     toggleFavorite(id);
@@ -303,7 +139,9 @@ function ProfessionalDetails() {
             id: doc.id,
             ...data,
           });
-          totalRating += data.rating || 0;
+          // Use averageCategoryRating if available, otherwise use rating
+          const ratingToUse = data.averageCategoryRating || data.rating || 0;
+          totalRating += ratingToUse;
         });
 
         // Calculate average rating
@@ -341,7 +179,7 @@ function ProfessionalDetails() {
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="flex items-center gap-2 text-xl font-bold text-white hover:text-amber-100 transition-colors">
                 <span className="text-2xl bg-purple-600 text-white rounded-lg px-2 py-1 font-light flex items-center justify-center">∞</span>
-                <span>Customer Portal</span>
+                <span>ExpertNextDoor</span>
               </Link>
             </div>
           </div>
@@ -364,7 +202,7 @@ function ProfessionalDetails() {
             <div className="flex justify-between items-center h-16">
               <Link to="/" className="flex items-center gap-2 text-xl font-bold text-white hover:text-amber-100 transition-colors">
                 <span className="text-2xl bg-purple-600 text-white rounded-lg px-2 py-1 font-light flex items-center justify-center">∞</span>
-                <span>Customer Portal</span>
+                <span>ExpertNextDoor</span>
               </Link>
             </div>
           </div>
@@ -392,7 +230,7 @@ function ProfessionalDetails() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="text-xl font-bold text-gray-900">
-              Customer Portal
+              ExpertNextDoor
             </Link>
             <div className="flex items-center space-x-4">
               <Link
@@ -406,13 +244,13 @@ function ProfessionalDetails() {
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main ref={swipeRef} className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 touch-pan-y">
           {/* Professional Header */}
           <div className="bg-white rounded-lg shadow-md p-8 mb-6 relative">
             {/* Heart Icon */}
             <button
               onClick={handleFavoriteClick}
-              className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full transition-all duration-200 transform hover:scale-110 active:scale-95"
               aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
             >
               <svg
@@ -434,12 +272,20 @@ function ProfessionalDetails() {
 
             <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-6 pr-12">
               <div className="flex-1">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  {professional.serviceType || 'Professional Service Provider'}
-                </h1>
-                <p className="text-lg text-gray-600 mb-4">
+                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    {professional.serviceType || 'Professional Service Provider'}
+                  </h1>
+                  <CompactVerificationBadges professional={professional} />
+                </div>
+                <p className="text-lg text-gray-600 mb-3">
                   {professional.serviceType ? `${professional.serviceType} Professional` : 'Service Provider'}
                 </p>
+                
+                {/* Verification Badges */}
+                <div className="mb-4">
+                  <VerificationBadges professional={professional} size="md" />
+                </div>
                 
                 {professional.location && (
                   <div className="flex items-center text-gray-600 mb-2">
@@ -482,7 +328,7 @@ function ProfessionalDetails() {
           <div className="pt-6 border-t border-gray-200">
             <button
               onClick={handleBookNow}
-              className="w-full md:w-auto px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors shadow-md hover:shadow-lg"
+              className="w-full md:w-auto px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 shadow-md hover:shadow-xl transform hover:scale-105 active:scale-95"
             >
               Book Now
             </button>
@@ -544,6 +390,24 @@ function ProfessionalDetails() {
             </div>
           </div>
 
+          {/* Service Area Map */}
+          {professional.lat && professional.lon && (
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Service Area</h3>
+              <ServiceAreaMap
+                initialLocation={{
+                  lat: professional.lat,
+                  lon: professional.lon,
+                  locationText: professional.locationText || professional.location || 'Service Area'
+                }}
+                serviceRadius={professional.serviceRadius || 25}
+                readOnly={true}
+                showRadius={true}
+                height="350px"
+              />
+            </div>
+          )}
+
           {/* Availability Section (if available) */}
           {professional.availability && (
             <div className="mt-8 pt-8 border-t border-gray-200">
@@ -558,16 +422,34 @@ function ProfessionalDetails() {
           )}
         </div>
 
+        {/* Service Packages Section */}
+        <div className="mt-8">
+          <ServicePackages 
+            professionalId={id} 
+            isOwner={auth.currentUser?.uid === id}
+          />
+        </div>
+
+        {/* Portfolio Gallery Section */}
+        <div className="mt-8">
+          <PortfolioGallery 
+            professionalId={id} 
+            isOwner={auth.currentUser?.uid === id}
+          />
+        </div>
+
         {/* Reviews Section */}
         <div className="mt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Reviews</h2>
           
           {/* Review Form */}
           {auth.currentUser && (
-            <ReviewForm 
-              professionalId={id} 
-              onReviewSubmitted={handleReviewSubmitted}
-            />
+            <div className="mb-8">
+              <EnhancedReviewForm 
+                professionalId={id} 
+                onReviewSubmitted={handleReviewSubmitted}
+              />
+            </div>
           )}
 
           {!auth.currentUser && (
@@ -585,7 +467,7 @@ function ProfessionalDetails() {
               <p className="text-gray-600">Loading reviews...</p>
             </div>
           ) : (
-            <ReviewsList reviews={reviews} />
+            <EnhancedReviewsList reviews={reviews} professionalId={id} />
           )}
         </div>
       </main>
