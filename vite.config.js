@@ -23,13 +23,13 @@ export default defineConfig({
       output: {
         // Manual chunk splitting for better caching
         manualChunks: (id) => {
-          // React and React DOM must be in the same chunk to avoid issues
+          // Don't split React - keep it in main bundle to ensure it loads first
+          // This prevents "Cannot read properties of undefined" errors
           if (id.includes('node_modules/react') || 
               id.includes('node_modules/react-dom') ||
-              id.includes('node_modules/react-router') ||
-              id.includes('node_modules/react-i18next') ||
-              id.includes('node_modules/@stripe/react-stripe-js')) {
-            return 'react-vendor';
+              id.includes('node_modules/react/jsx-runtime')) {
+            // Keep React in main bundle - don't split it
+            return undefined;
           }
           
           // Firebase vendor chunk (handle Firebase's complex structure)
@@ -42,7 +42,14 @@ export default defineConfig({
             return 'sentry-vendor';
           }
           
-          // Other node_modules go into vendor chunk
+          // React-related packages (but not React core)
+          if (id.includes('node_modules/react-router') ||
+              id.includes('node_modules/react-i18next') ||
+              id.includes('node_modules/@stripe/react-stripe-js')) {
+            return 'react-vendor';
+          }
+          
+          // Other large vendor libraries
           if (id.includes('node_modules')) {
             return 'vendor';
           }
@@ -71,7 +78,9 @@ export default defineConfig({
   optimizeDeps: {
     include: [
       'react', 
+      'react/jsx-runtime',
       'react-dom', 
+      'react-dom/client',
       'react-router-dom',
       'react-i18next',
       '@stripe/react-stripe-js'
@@ -79,7 +88,7 @@ export default defineConfig({
     // Exclude Firebase from pre-bundling (it's ESM-only)
     exclude: ['firebase'],
   },
-  // Ensure React is resolved correctly
+  // Ensure React is resolved correctly and prevent multiple instances
   resolve: {
     dedupe: ['react', 'react-dom'],
   },
