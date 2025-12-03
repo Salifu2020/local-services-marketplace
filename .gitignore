@@ -43,3 +43,8 @@ firestore-debug.log
 # Sentry
 .sentryclirc
 
+# Documentation files (keep README.md)
+*.md
+!README.md
+!server/README.md
+
