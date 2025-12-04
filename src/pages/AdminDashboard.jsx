@@ -154,15 +154,26 @@ function AdminDashboard() {
             <p className="text-gray-600 mb-6">
               You do not have permission to access this page.
             </p>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-gray-500 mb-4">
               Current User ID: <span className="font-mono">{user?.uid || 'Not authenticated'}</span>
             </p>
-            <Link
-              to="/"
-              className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Return to Home
-            </Link>
+            <p className="text-sm text-gray-500 mb-4">
+              Required Admin ID: <span className="font-mono">{getAdminUserId()}</span>
+            </p>
+            <div className="space-y-3">
+              <Link
+                to="/pro-dashboard"
+                className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium w-full"
+              >
+                Go to Professional Dashboard (Set Admin)
+              </Link>
+              <Link
+                to="/"
+                className="inline-block bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium w-full"
+              >
+                Return to Home
+              </Link>
+            </div>
           </div>
         </div>
       </>
