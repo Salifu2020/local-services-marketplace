@@ -163,6 +163,14 @@ function Navigation() {
             >
               {t('nav.proDashboard')}
             </Link>
+            {auth.currentUser && (
+              <Link
+                to="/admin-dashboard"
+                className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
+              >
+                {t('nav.adminDashboard')}
+              </Link>
+            )}
             <NotificationBell />
             <Link
               to="/pro-onboarding"
@@ -254,6 +262,15 @@ function Navigation() {
               >
                 {t('nav.proDashboard')}
               </Link>
+              {auth.currentUser && (
+                <Link
+                  to="/admin-dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+                >
+                  {t('nav.adminDashboard')}
+                </Link>
+              )}
               <Link
                 to="/pro-onboarding"
                 onClick={() => setMobileMenuOpen(false)}
