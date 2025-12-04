@@ -6,8 +6,16 @@ import { Skeleton } from '../components/Skeleton';
 import VerificationManager from '../components/admin/VerificationManager';
 import ProfessionalManager from '../components/admin/ProfessionalManager';
 
-// Hardcoded admin user ID
-const ADMIN_USER_ID = 'admin-123';
+// Admin user ID - can be set via localStorage or environment variable
+const getAdminUserId = () => {
+  // Check localStorage first (allows dynamic admin assignment)
+  const storedAdminId = localStorage.getItem('adminUserId');
+  if (storedAdminId) {
+    return storedAdminId;
+  }
+  // Fallback to environment variable
+  return import.meta.env.VITE_ADMIN_USER_ID || 'admin-123';
+};
 
 function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -28,7 +36,7 @@ function AdminDashboard() {
     const user = auth.currentUser;
     
     // Access control: Check if user is admin
-    if (!user || user.uid !== ADMIN_USER_ID) {
+    if (!user || user.uid !== getAdminUserId()) {
       setLoading(false);
       return;
     }
@@ -116,7 +124,7 @@ function AdminDashboard() {
   }, []);
 
   const user = auth.currentUser;
-  const isAdmin = user && user.uid === ADMIN_USER_ID;
+  const isAdmin = user && user.uid === getAdminUserId();
 
   // Access Denied Screen
   if (!isAdmin) {
@@ -490,7 +498,7 @@ function AdminDashboard() {
             <div className="mt-6 pt-6 border-t border-gray-300">
               <p className="text-xs text-gray-600">
                 <strong>Note:</strong> This debug panel is only visible to admin users. 
-                Admin User ID: <span className="font-mono">{ADMIN_USER_ID}</span>
+                Admin User ID: <span className="font-mono">{getAdminUserId()}</span>
               </p>
             </div>
           </div>
