@@ -23,8 +23,17 @@ import {
   fetchProfessionalReviews,
 } from '../utils/analytics';
 
-// Hardcoded admin user ID
-const ADMIN_USER_ID = 'admin-123';
+// Admin user ID - can be set via localStorage or environment variable
+// To become admin: Open browser console and run: localStorage.setItem('adminUserId', 'YOUR_USER_ID')
+const getAdminUserId = () => {
+  // Check localStorage first (allows dynamic admin assignment)
+  const storedAdminId = localStorage.getItem('adminUserId');
+  if (storedAdminId) {
+    return storedAdminId;
+  }
+  // Fallback to environment variable
+  return import.meta.env.VITE_ADMIN_USER_ID || 'admin-123';
+};
 
 function ProDashboard() {
   const navigate = useNavigate();
@@ -694,9 +703,39 @@ function ProDashboard() {
         )}
 
         {/* Admin Section - Professional Management */}
-        {auth.currentUser && auth.currentUser.uid === ADMIN_USER_ID && (
+        {auth.currentUser && auth.currentUser.uid === getAdminUserId() && (
           <div className="mt-8">
             <ProfessionalManager />
+          </div>
+        )}
+
+        {/* Admin Setup Helper - Show current user ID for easy admin setup */}
+        {auth.currentUser && (
+          <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-3">
+              🔧 Admin Access Setup
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+              To access Professional Management, you need to set yourself as admin. Your current User ID is:
+            </p>
+            <div className="bg-white dark:bg-slate-800 p-3 rounded border border-gray-200 dark:border-slate-700 mb-4">
+              <code className="text-sm font-mono text-gray-900 dark:text-slate-100 break-all">
+                {auth.currentUser.uid}
+              </code>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.setItem('adminUserId', auth.currentUser.uid);
+                alert('You are now set as admin! The page will refresh.');
+                window.location.reload();
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              Set Me as Admin
+            </button>
+            <p className="text-xs text-gray-500 dark:text-slate-500 mt-3">
+              This will allow you to manage and delete professional profiles. The setting is saved in your browser.
+            </p>
           </div>
         )}
 
