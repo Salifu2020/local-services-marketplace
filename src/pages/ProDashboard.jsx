@@ -14,6 +14,7 @@ import PortfolioGallery from '../components/portfolio/PortfolioGallery';
 import ServicePackages from '../components/packages/ServicePackages';
 import DocumentSharing from '../components/documents/DocumentSharing';
 import AdvancedAvailabilityManager from '../components/AdvancedAvailabilityManager';
+import ProfessionalManager from '../components/admin/ProfessionalManager';
 import {
   calculateEarnings,
   calculateBookingTrends,
@@ -21,6 +22,9 @@ import {
   calculateAvailabilityAnalytics,
   fetchProfessionalReviews,
 } from '../utils/analytics';
+
+// Hardcoded admin user ID
+const ADMIN_USER_ID = 'admin-123';
 
 function ProDashboard() {
   const navigate = useNavigate();
@@ -686,6 +690,13 @@ function ProDashboard() {
               Manage blocked dates, vacation mode, buffer times, and auto-decline settings to control when customers can book your services.
             </p>
             <AdvancedAvailabilityManager />
+          </div>
+        )}
+
+        {/* Admin Section - Professional Management */}
+        {auth.currentUser && auth.currentUser.uid === ADMIN_USER_ID && (
+          <div className="mt-8">
+            <ProfessionalManager />
           </div>
         )}
 
