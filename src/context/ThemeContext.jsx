@@ -27,6 +27,7 @@ export function ThemeProvider({ children }) {
     return 'light';
   });
   const [loading, setLoading] = useState(true);
+  const [hasLoadedFromProfile, setHasLoadedFromProfile] = useState(false);
 
   // Apply theme to document
   useEffect(() => {
@@ -39,10 +40,10 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Load theme from user profile when authenticated
+  // Load theme from user profile when authenticated (only once on initial load)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
+      if (user && !hasLoadedFromProfile) {
         try {
           const userDocRef = doc(
             db,
@@ -61,15 +62,19 @@ export function ThemeProvider({ children }) {
               setTheme(userData.theme);
             }
           }
+          setHasLoadedFromProfile(true);
         } catch (error) {
           console.error('Error loading theme from user profile:', error);
+          setHasLoadedFromProfile(true);
         }
+      } else if (!user) {
+        setHasLoadedFromProfile(false);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [hasLoadedFromProfile]);
 
   // Save theme to user profile when authenticated
   const saveThemeToProfile = async (newTheme) => {
@@ -98,6 +103,7 @@ export function ThemeProvider({ children }) {
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
+    console.log('Toggling theme from', theme, 'to', newTheme);
     setTheme(newTheme);
     saveThemeToProfile(newTheme);
   };
