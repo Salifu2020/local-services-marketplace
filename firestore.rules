@@ -15,17 +15,12 @@ service cloud.firestore {
     // Helper function to check if user is admin
     // Checks both hardcoded admin IDs and user document admin status
     function isAdmin() {
-      if (!isAuthenticated()) {
-        return false;
-      }
-      // Check hardcoded admin IDs
-      if (request.auth.uid == 'admin-123' || request.auth.uid == 'SdPQVpbeqGUq7F78FBcZ72MZV2I2') {
-        return true;
-      }
-      // Check if user document has isAdmin flag
-      let userDocPath = /databases/$(database)/documents/artifacts/$(appId)/public/data/users/$(request.auth.uid);
-      return exists(userDocPath) && 
-             get(userDocPath).data.isAdmin == true;
+      return isAuthenticated() && (
+        request.auth.uid == 'admin-123' ||
+        request.auth.uid == 'SdPQVpbeqGUq7F78FBcZ72MZV2I2' ||
+        (exists(/databases/$(database)/documents/artifacts/$(appId)/public/data/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/artifacts/$(appId)/public/data/users/$(request.auth.uid)).data.isAdmin == true)
+      );
     }
     
     // ============================================
