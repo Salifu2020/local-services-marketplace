@@ -23,7 +23,9 @@ function Logo({ showText = true, size = 'md', link = false, className = '' }) {
     xl: 'text-3xl',
   };
 
-  const textColor = className.includes('text-white') ? 'text-white' : 'text-gray-900';
+  const textColor = className.includes('text-white') 
+    ? 'text-white dark:text-slate-100' 
+    : 'text-gray-900 dark:text-slate-100';
   
   const logoContent = (
     <div className={`flex items-center gap-2 ${className}`}>

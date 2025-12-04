@@ -6,6 +6,7 @@ import { signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { ToastProvider } from './context/ToastContext';
 import { LoadingProvider } from './context/LoadingContext';
+import { ThemeProvider } from './context/ThemeContext';
 import NotificationBell from './components/NotificationBell';
 import Logo from './components/Logo';
 import { useFavorites } from './hooks/useFavorites';
@@ -21,6 +22,7 @@ import SearchFilters from './components/SearchFilters';
 import VerificationBadges, { CompactVerificationBadges } from './components/VerificationBadges';
 import { getReferralCodeFromURL, processReferralCode } from './utils/referral';
 import LanguageSelector from './components/LanguageSelector';
+import ThemeToggle from './components/ThemeToggle';
 import { useTranslation } from 'react-i18next';
 
 // Lazy load route components for code splitting
@@ -102,7 +104,7 @@ function Navigation() {
   }
 
   return (
-    <nav className="bg-amber-800 shadow-sm border-b border-amber-900">
+    <nav className="bg-amber-800 dark:bg-slate-800 shadow-sm border-b border-amber-900 dark:border-slate-700 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
@@ -112,28 +114,29 @@ function Navigation() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-4">
+            <ThemeToggle />
             <LanguageSelector />
             <Link
               to="/"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
             >
               Find a Pro
             </Link>
             <Link
               to="/dashboard"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
             >
               Dashboard
             </Link>
             <Link
               to="/my-bookings"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
             >
               My Bookings
             </Link>
             <Link
               to="/my-messages"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
             >
               My Messages
             </Link>
@@ -150,13 +153,13 @@ function Navigation() {
             </Link>
             <Link
               to="/my-profile"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
             >
               {t('nav.myProfile')}
             </Link>
             <Link
               to="/pro-dashboard"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
             >
               {t('nav.proDashboard')}
             </Link>
@@ -169,8 +172,9 @@ function Navigation() {
             </Link>
           </div>
 
-          {/* Mobile: Notification Bell + Hamburger */}
+          {/* Mobile: Theme Toggle + Notification Bell + Hamburger */}
           <div className="flex lg:hidden items-center space-x-2">
+            <ThemeToggle />
             <NotificationBell />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -257,7 +261,11 @@ function Navigation() {
               >
                 {t('onboarding.title')}
               </Link>
-              <div className="mt-4 pt-4 border-t border-amber-700">
+              <div className="mt-4 pt-4 border-t border-amber-700 dark:border-amber-600 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-white dark:text-slate-200 text-sm font-medium">{t('theme.title')}</span>
+                  <ThemeToggle />
+                </div>
                 <LanguageSelector />
               </div>
             </div>
@@ -308,7 +316,7 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-lg active:shadow-md transition-all p-4 sm:p-6 border border-gray-200 relative touch-manipulation">
+    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-slate-900/50 hover:shadow-lg dark:hover:shadow-slate-900 active:shadow-md transition-all p-4 sm:p-6 border border-gray-200 dark:border-slate-700 relative touch-manipulation">
       {/* Heart Icon */}
       <button
         onClick={handleFavoriteClick}
@@ -335,12 +343,12 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 pr-12">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-xl font-semibold text-gray-900">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
               {professional.serviceType || 'Professional'}
             </h3>
             <CompactVerificationBadges professional={professional} />
           </div>
-          <p className="text-sm text-gray-500 mb-2">
+          <p className="text-sm text-gray-500 dark:text-slate-400 mb-2">
             Service Provider
           </p>
           <div className="mt-2">
@@ -353,11 +361,11 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
       {averageRating !== null && averageRating > 0 && (
         <div className="mb-3 flex items-center gap-2">
           <StarRating rating={Math.round(averageRating)} size="md" />
-          <span className="text-lg font-bold text-gray-900">
+          <span className="text-lg font-bold text-gray-900 dark:text-slate-100">
             {averageRating.toFixed(1)}
           </span>
           {reviewCount > 0 && (
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 dark:text-slate-400">
               ({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})
             </span>
           )}
@@ -367,9 +375,9 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
       {professional.hourlyRate && (
         <div className="mb-3">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <p className="text-2xl font-bold text-blue-600">
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
               ${professional.hourlyRate.toFixed(2)}
-              <span className="text-sm font-normal text-gray-600">/hr</span>
+              <span className="text-sm font-normal text-gray-600 dark:text-slate-400">/hr</span>
             </p>
           </div>
         </div>
@@ -378,7 +386,7 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
       {/* Distance Away - Clearly Displayed */}
       {distance !== null && distance !== undefined && (
         <div className="mb-3">
-          <p className="text-sm font-medium text-gray-700 flex items-center">
+          <p className="text-sm font-medium text-gray-700 dark:text-slate-300 flex items-center">
             <span className="mr-1">📍</span>
             <span className="font-semibold">{distance.toFixed(1)} km {t('home.distanceAway')}</span>
           </p>
@@ -387,7 +395,7 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
       
       {professional.location && (
         <div className="mb-3">
-          <p className="text-sm text-gray-600 flex items-center">
+          <p className="text-sm text-gray-600 dark:text-slate-400 flex items-center">
             <span className="mr-1">📍</span>
             {professional.location}
           </p>
@@ -395,7 +403,7 @@ function ProfessionalCard({ professional, userId, distance, averageRating = null
       )}
       
       {professional.bio && (
-        <p className="text-sm text-gray-700 line-clamp-2 mb-4">
+        <p className="text-sm text-gray-700 dark:text-slate-300 line-clamp-2 mb-4">
           {professional.bio}
         </p>
       )}
@@ -784,11 +792,11 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
         <div className="mb-8">
           <div className="w-full max-w-2xl mx-auto">
             <div className="text-center mb-4">
-              <h2 className="text-3xl sm:text-4xl font-bold text-white">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white dark:text-slate-100">
                 {t('home.title')}
               </h2>
             </div>
-            <p className="text-blue-100 text-center mb-8">
+            <p className="text-blue-100 dark:text-slate-300 text-center mb-8">
               {t('home.subtitle')}
             </p>
             
@@ -802,7 +810,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search for services (e.g., 'Plumber', 'Electrician') or keywords in bio..."
-                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all touch-manipulation"
+                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent shadow-sm transition-all touch-manipulation bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
@@ -820,7 +828,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
                     >
                       ✕
                     </button>
@@ -842,7 +850,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     value={locationInput}
                     onChange={(e) => setLocationInput(e.target.value)}
                     placeholder={t('home.yourLocation')}
-                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm transition-all touch-manipulation"
+                    className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent shadow-sm transition-all touch-manipulation bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="words"
@@ -865,7 +873,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                     <button
                       type="button"
                       onClick={() => setLocationInput('')}
-                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      className="absolute right-20 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
                       aria-label="Clear location"
                     >
                       ✕
@@ -890,7 +898,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                   id="maxDistance"
                   value={maxDistance}
                   onChange={(e) => setMaxDistance(e.target.value)}
-                  className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm transition-all bg-white"
+                  className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent shadow-sm transition-all bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
                 >
                   <option value="all">{t('home.all')}</option>
                   <option value="5">5 {t('home.km')}</option>
@@ -993,14 +1001,14 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                 ))}
               </div>
             ) : (
-              <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md dark:shadow-slate-900/50 p-12 text-center border border-gray-200 dark:border-slate-700">
                 <div className="text-6xl mb-4">
                   {searchQuery || locationInput ? '🔍' : '👷'}
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-slate-100 mb-2">
                   {searchQuery || locationInput ? t('home.noResults') : t('home.noResults')}
                 </h3>
-                <p className="text-gray-600 mb-4 max-w-md mx-auto">
+                <p className="text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
                   {searchQuery || locationInput ? (
                     <>
                       {t('home.tryDifferentSearch')}
@@ -1022,8 +1030,8 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                 <div className="mt-6 space-y-3">
                   {searchQuery || locationInput ? (
                     <>
-                      <p className="text-sm text-gray-500 mb-2">Suggestions:</p>
-                      <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 mb-4">
+                      <p className="text-sm text-gray-500 dark:text-slate-400 mb-2">Suggestions:</p>
+                      <ul className="list-disc list-inside text-sm text-gray-600 dark:text-slate-400 space-y-1 mb-4">
                         <li>Try different search terms (e.g., "Plumber", "Electrician")</li>
                         <li>Clear your location filter or try a different area</li>
                         <li>Increase your max distance radius</li>
@@ -1036,7 +1044,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
                             setLocationInput('');
                             setMaxDistance('all');
                           }}
-                          className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                          className="px-6 py-3 bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-slate-200 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors font-medium"
                         >
                           Clear Filters
                         </button>
@@ -1143,20 +1151,21 @@ function App() {
   // Show loading screen until authentication is ready
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-blue-900">
+      <div className="min-h-screen flex items-center justify-center bg-blue-900 dark:bg-slate-900 transition-colors duration-200">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600 text-lg">Loading...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
+          <p className="text-gray-600 dark:text-slate-400 text-lg">Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <ToastProvider>
-      <LoadingProvider>
-        <Router>
-          <div className="min-h-screen bg-blue-900">
+    <ThemeProvider>
+      <ToastProvider>
+        <LoadingProvider>
+          <Router>
+            <div className="min-h-screen bg-blue-900 dark:bg-slate-900 transition-colors duration-200">
             <Suspense fallback={<RouteLoading message="Loading page..." />}>
               <Routes>
                 <Route
@@ -1277,8 +1286,9 @@ function App() {
             </Suspense>
           </div>
         </Router>
-      </LoadingProvider>
-    </ToastProvider>
+        </LoadingProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

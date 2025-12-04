@@ -205,6 +205,14 @@
   "date": {
     "format": "DD/MM/YYYY",
     "timeFormat": "HH:mm"
+  },
+  "theme": {
+    "title": "Tema",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Sistema",
+    "switchToLight": "Cambiar a modo claro",
+    "switchToDark": "Cambiar a modo oscuro"
   }
 }
 

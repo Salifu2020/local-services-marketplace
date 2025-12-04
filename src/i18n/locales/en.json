@@ -35,6 +35,14 @@
     "disputeResolution": "Dispute Resolution",
     "myDisputes": "My Disputes"
   },
+  "theme": {
+    "title": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
+  },
   "availability": {
     "advancedSettings": "Advanced Availability Settings",
     "advancedDescription": "Manage blocked dates, vacation mode, buffer times, and auto-decline settings.",
