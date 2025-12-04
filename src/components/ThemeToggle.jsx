@@ -6,25 +6,28 @@ function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   const { t } = useTranslation();
 
-  const handleToggle = (e) => {
+  const handleClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('ThemeToggle clicked, current theme:', theme);
-    toggleTheme();
+    try {
+      toggleTheme();
+    } catch (error) {
+      console.error('Error toggling theme:', error);
+    }
   };
 
   return (
     <button
-      onClick={handleToggle}
+      onClick={handleClick}
       type="button"
-      className="relative inline-flex items-center justify-center w-12 h-12 rounded-lg bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 z-10"
-      style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+      className="relative inline-flex items-center justify-center w-12 h-12 rounded-lg bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800"
+      style={{ cursor: 'pointer' }}
       aria-label={theme === 'dark' ? t('theme.switchToLight') : t('theme.switchToDark')}
       title={theme === 'dark' ? t('theme.switchToLight') : t('theme.switchToDark')}
     >
-      {/* Sun Icon (Light Mode) */}
+      {/* Sun Icon (shown when in dark mode - click to switch to light) */}
       <svg
-        className={`w-5 h-5 text-yellow-500 transition-all duration-300 ${
+        className={`absolute inset-0 m-auto w-5 h-5 text-yellow-500 transition-all duration-300 ${
           theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'
         }`}
         fill="currentColor"
@@ -38,9 +41,9 @@ function ThemeToggle() {
         />
       </svg>
 
-      {/* Moon Icon (Dark Mode) */}
+      {/* Moon Icon (shown when in light mode - click to switch to dark) */}
       <svg
-        className={`absolute w-5 h-5 text-blue-400 transition-all duration-300 ${
+        className={`absolute inset-0 m-auto w-5 h-5 text-blue-400 transition-all duration-300 ${
           theme === 'light' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'
         }`}
         fill="currentColor"

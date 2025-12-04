@@ -102,10 +102,24 @@ export function ThemeProvider({ children }) {
   };
 
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    console.log('Toggling theme from', theme, 'to', newTheme);
-    setTheme(newTheme);
-    saveThemeToProfile(newTheme);
+    setTheme((currentTheme) => {
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      console.log('Toggling theme from', currentTheme, 'to', newTheme);
+      
+      // Apply immediately
+      const root = document.documentElement;
+      if (newTheme === 'dark') {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+      localStorage.setItem('theme', newTheme);
+      
+      // Save to profile
+      saveThemeToProfile(newTheme);
+      
+      return newTheme;
+    });
   };
 
   const setThemeMode = (newTheme) => {
