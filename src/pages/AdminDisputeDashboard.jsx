@@ -6,7 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { useLoading } from '../context/LoadingContext';
 import { Skeleton } from '../components/Skeleton';
 
-const ADMIN_USER_ID = process.env.VITE_ADMIN_USER_ID || 'SdPQVpbeqGUq7F78FBcZ72MZV2I2';
+const ADMIN_USER_ID = import.meta.env.VITE_ADMIN_USER_ID || 'SdPQVpbeqGUq7F78FBcZ72MZV2I2';
 
 function AdminDisputeDashboard() {
   const navigate = useNavigate();
