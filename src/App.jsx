@@ -8,7 +8,6 @@ import { ToastProvider } from './context/ToastContext';
 import { LoadingProvider } from './context/LoadingContext';
 import NotificationBell from './components/NotificationBell';
 import Logo from './components/Logo';
-// import SentryTestButton from './components/SentryTestButton'; // Uncomment to test Sentry
 import { useFavorites } from './hooks/useFavorites';
 import { mockGeocode as mockGeocodeUtil } from './utils/geocoding';
 import { setSentryUser } from './sentry';
@@ -779,18 +778,7 @@ function HomePage({ user, searchQuery, setSearchQuery }) {
           transition: isPulling ? 'none' : 'padding-top 0.3s ease-out',
         }}
       >
-        {/* User ID Display - Hidden in production, uncomment for debugging */}
-        {/* <div className="mb-6 bg-blue-800 border border-blue-700 rounded-lg p-4">
-          <p className="text-sm text-blue-100 mb-1">Current User ID:</p>
-          <p className="text-lg font-mono font-semibold text-white break-all">
-            {user.uid}
-          </p>
-        </div> */}
 
-        {/* Sentry Test Button - Uncomment to test Sentry error tracking */}
-        {/* <div className="mb-6 flex justify-center">
-          <SentryTestButton />
-        </div> */}
 
         {/* Landing Page with Centered Search Bar */}
         <div className="mb-8">

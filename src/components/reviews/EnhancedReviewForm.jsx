@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, appId } from '../../firebase';
+import { auth, db, appId, storage } from '../../firebase';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from '../../context/ToastContext';
 
 // Review Categories
@@ -132,11 +133,33 @@ function EnhancedReviewForm({ professionalId, onReviewSubmitted }) {
     setError(null);
 
     try {
-      // Upload photos to Firebase Storage (simplified - in production, use Firebase Storage)
+      // Upload photos to Firebase Storage
       const photoUrls = [];
-      // TODO: Upload photos to Firebase Storage and get URLs
-      // For now, we'll store as base64 (not recommended for production)
-      // In production: upload to Firebase Storage, get download URLs
+      if (photos.length > 0) {
+        for (const photo of photos) {
+          try {
+            // Compress image before upload
+            const compressedFile = await compressImage(photo.file);
+            
+            // Create storage reference
+            const storageRef = ref(
+              storage,
+              `reviews/${professionalId}/${user.uid}/${Date.now()}-${photo.file.name}`
+            );
+            
+            // Upload to Firebase Storage
+            await uploadBytes(storageRef, compressedFile);
+            
+            // Get download URL
+            const downloadURL = await getDownloadURL(storageRef);
+            photoUrls.push(downloadURL);
+          } catch (uploadError) {
+            console.error('Error uploading photo:', uploadError);
+            showError(`Failed to upload ${photo.file.name}. Please try again.`);
+            // Continue with other photos
+          }
+        }
+      }
 
       const reviewsRef = collection(
         db,
@@ -390,6 +413,52 @@ function EnhancedReviewForm({ professionalId, onReviewSubmitted }) {
       </div>
     </form>
   );
+}
+
+/**
+ * Compress image before upload
+ */
+function compressImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.8) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Calculate new dimensions
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            resolve(new File([blob], file.name, { type: file.type }));
+          },
+          file.type,
+          quality
+        );
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export default EnhancedReviewForm;

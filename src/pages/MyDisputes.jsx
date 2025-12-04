@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import DisputeList from '../components/disputes/DisputeList';
 import DisputeForm from '../components/disputes/DisputeForm';
 import { useToast } from '../context/ToastContext';
@@ -10,16 +11,20 @@ function MyDisputes() {
   const { showError } = useToast();
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [user, setUser] = useState(auth.currentUser);
 
   // Redirect if not authenticated
-  React.useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) {
-      navigate('/');
-    }
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) {
+        navigate('/');
+      }
+    });
+
+    return () => unsubscribe();
   }, [navigate]);
 
-  const user = auth.currentUser;
   if (!user) {
     return null;
   }
