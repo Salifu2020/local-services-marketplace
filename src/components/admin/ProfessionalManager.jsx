@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, appId } from '../../firebase';
-import { collection, getDocs, doc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
 
 function ProfessionalManager() {
@@ -26,8 +26,8 @@ function ProfessionalManager() {
         'professionals'
       );
       
-      const q = query(professionalsRef, orderBy('serviceType', 'asc'));
-      const snapshot = await getDocs(q);
+      // Remove orderBy to avoid index requirements - we'll sort client-side
+      const snapshot = await getDocs(professionalsRef);
       
       const professionalsList = [];
       snapshot.forEach((docSnapshot) => {
@@ -35,6 +35,13 @@ function ProfessionalManager() {
           id: docSnapshot.id,
           ...docSnapshot.data(),
         });
+      });
+      
+      // Sort client-side by serviceType
+      professionalsList.sort((a, b) => {
+        const serviceTypeA = a.serviceType || '';
+        const serviceTypeB = b.serviceType || '';
+        return serviceTypeA.localeCompare(serviceTypeB);
       });
       
       setProfessionals(professionalsList);

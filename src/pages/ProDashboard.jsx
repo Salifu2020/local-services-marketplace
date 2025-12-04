@@ -742,12 +742,23 @@ function ProDashboard() {
                   );
                   await setDoc(
                     userDocRef,
-                    { isAdmin: true, adminSince: new Date().toISOString() },
+                    { 
+                      isAdmin: true, 
+                      adminSince: new Date().toISOString(),
+                      userId: auth.currentUser.uid // Ensure userId is set
+                    },
                     { merge: true }
                   );
                   
-                  alert('You are now set as admin! The page will refresh.');
-                  window.location.reload();
+                  console.log('Admin status saved to Firestore:', {
+                    userId: auth.currentUser.uid,
+                    userDocPath: `artifacts/${appId}/public/data/users/${auth.currentUser.uid}`
+                  });
+                  
+                  alert('You are now set as admin! Please wait a few seconds for Firestore rules to update, then refresh the page.');
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 2000);
                 } catch (error) {
                   console.error('Error setting admin:', error);
                   alert('Error setting admin status. Please try again.');
