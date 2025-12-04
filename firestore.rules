@@ -32,6 +32,7 @@ service cloud.firestore {
       // Allow public read access (for search functionality)
       // This includes both individual document reads and collection queries
       allow read: if true;
+      allow list: if true; // Explicitly allow collection queries
       
       // Only the professional can write to their own document
       allow create: if isAuthenticated() && 
@@ -64,8 +65,9 @@ service cloud.firestore {
     
     // Users Collection - Public read, owner write
     match /artifacts/{appId}/public/data/users/{userId} {
-      // Allow read for authenticated users
+      // Allow read for authenticated users (includes list operations)
       allow read: if isAuthenticated();
+      allow list: if isAuthenticated(); // Explicitly allow collection queries
       
       // Users can create their own document
       allow create: if isAuthenticated() && 
