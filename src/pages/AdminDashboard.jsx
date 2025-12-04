@@ -4,6 +4,7 @@ import { auth, db, appId } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Skeleton } from '../components/Skeleton';
 import VerificationManager from '../components/admin/VerificationManager';
+import ProfessionalManager from '../components/admin/ProfessionalManager';
 
 // Hardcoded admin user ID
 const ADMIN_USER_ID = 'admin-123';
@@ -368,6 +369,11 @@ function AdminDashboard() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Professional Management */}
+        <div className="mb-8">
+          <ProfessionalManager />
         </div>
 
         {/* Professional Verification Management */}
