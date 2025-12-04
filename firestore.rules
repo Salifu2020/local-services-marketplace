@@ -13,15 +13,22 @@ service cloud.firestore {
     }
     
     // Helper function to check if user is admin
+    // Checks both hardcoded admin IDs and user document admin status
     function isAdmin() {
-      return isAuthenticated() && request.auth.uid == 'admin-123';
+      return isAuthenticated() && (
+        request.auth.uid == 'admin-123' ||
+        request.auth.uid == 'SdPQVpbeqGUq7F78FBcZ72MZV2I2' ||
+        // Check if user document has isAdmin flag
+        (exists(/databases/$(database)/documents/artifacts/$(appId)/public/data/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/artifacts/$(appId)/public/data/users/$(request.auth.uid)).data.isAdmin == true)
+      );
     }
     
     // ============================================
     // PUBLIC DATA COLLECTIONS
     // ============================================
     
-    // Professionals Collection - Public read, owner write
+    // Professionals Collection - Public read, owner write, admin can delete
     match /artifacts/{appId}/public/data/professionals/{professionalId} {
       // Allow public read access (for search functionality)
       allow read: if true;
@@ -29,8 +36,13 @@ service cloud.firestore {
       // Only the professional can write to their own document
       allow create: if isAuthenticated() && 
                      request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && 
-                             resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
+      // Allow delete by owner OR admin
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
       
       // Reviews subcollection
       match /reviews/{reviewId} {

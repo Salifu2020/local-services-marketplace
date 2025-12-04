@@ -724,10 +724,34 @@ function ProDashboard() {
               </code>
             </div>
             <button
-              onClick={() => {
-                localStorage.setItem('adminUserId', auth.currentUser.uid);
-                alert('You are now set as admin! The page will refresh.');
-                window.location.reload();
+              onClick={async () => {
+                try {
+                  // Save to localStorage for client-side checks
+                  localStorage.setItem('adminUserId', auth.currentUser.uid);
+                  
+                  // Also save admin status to Firestore user document
+                  const { doc, setDoc } = await import('firebase/firestore');
+                  const userDocRef = doc(
+                    db,
+                    'artifacts',
+                    appId,
+                    'public',
+                    'data',
+                    'users',
+                    auth.currentUser.uid
+                  );
+                  await setDoc(
+                    userDocRef,
+                    { isAdmin: true, adminSince: new Date().toISOString() },
+                    { merge: true }
+                  );
+                  
+                  alert('You are now set as admin! The page will refresh.');
+                  window.location.reload();
+                } catch (error) {
+                  console.error('Error setting admin:', error);
+                  alert('Error setting admin status. Please try again.');
+                }
               }}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
             >
