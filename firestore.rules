@@ -42,11 +42,7 @@ service cloud.firestore {
       // Allow delete by owner OR admin
       // Temporarily allow any authenticated user to delete for testing
       // TODO: Restrict to admin only after confirming admin setup works
-      allow delete: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        isAdmin() ||
-        true // TEMPORARY: Allow all authenticated users to delete for testing
-      );
+      allow delete: if isAuthenticated();
       
       // Reviews subcollection
       match /reviews/{reviewId} {
