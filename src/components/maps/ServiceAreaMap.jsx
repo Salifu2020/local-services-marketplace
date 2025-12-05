@@ -48,17 +48,34 @@ function ServiceAreaMap({
             script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
             script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
             script.crossOrigin = '';
-            script.onload = resolve;
-            script.onerror = reject;
+            
+            // Add timeout to prevent infinite loading
+            const timeout = setTimeout(() => {
+              reject(new Error('Map loading timeout'));
+            }, 10000); // 10 second timeout
+            
+            script.onload = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            
+            script.onerror = () => {
+              clearTimeout(timeout);
+              reject(new Error('Failed to load Leaflet library'));
+            };
+            
             document.head.appendChild(script);
           });
         }
 
+        // Wait a bit for Leaflet to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
         setMapLoaded(true);
       } catch (error) {
         console.error('Error loading Leaflet:', error);
         showError('Failed to load map. Please refresh the page.');
         setLoading(false);
+        setMapLoaded(false);
       }
     };
 
@@ -67,71 +84,123 @@ function ServiceAreaMap({
 
   // Initialize map when Leaflet is loaded
   useEffect(() => {
-    if (!mapLoaded || !mapRef.current || mapInstanceRef.current) return;
+    if (!mapLoaded || !mapRef.current) {
+      // If map container is not ready, wait a bit and try again
+      if (mapLoaded && !mapRef.current) {
+        const timer = setTimeout(() => {
+          if (!mapRef.current) {
+            console.warn('Map container not found, setting loading to false');
+            setLoading(false);
+          }
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
+      return;
+    }
+
+    // If map already exists, don't reinitialize
+    if (mapInstanceRef.current) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const { L } = window;
-      if (!L) return;
-
-      // Initialize map
-      const map = L.map(mapRef.current, {
-        center: [location.lat, location.lon],
-        zoom: 11,
-        zoomControl: !readOnly,
-      });
-
-      // Add OpenStreetMap tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19,
-      }).addTo(map);
-
-      mapInstanceRef.current = map;
-
-      // Add marker for professional location
-      const marker = L.marker([location.lat, location.lon], {
-        draggable: !readOnly,
-      }).addTo(map);
-
-      markerRef.current = marker;
-
-      // Add circle for service radius
-      if (showRadius) {
-        const circle = L.circle([location.lat, location.lon], {
-          radius: radius * 1000, // Convert km to meters
-          color: '#3b82f6',
-          fillColor: '#3b82f6',
-          fillOpacity: 0.2,
-          weight: 2,
-        }).addTo(map);
-
-        circleRef.current = circle;
+      if (!L) {
+        console.warn('Leaflet not available yet');
+        // Set a timeout to try again
+        const timer = setTimeout(() => {
+          if (!window.L) {
+            setLoading(false);
+            showError('Map library failed to load. Please refresh the page.');
+          }
+        }, 3000);
+        return () => clearTimeout(timer);
       }
 
-      // Handle marker drag (if not read-only)
-      if (!readOnly) {
-        marker.on('dragend', (e) => {
-          const newLat = e.target.getLatLng().lat;
-          const newLon = e.target.getLatLng().lng;
-          const newLocation = { ...location, lat: newLat, lon: newLon };
-          setLocation(newLocation);
-          if (onLocationChange) {
-            onLocationChange(newLocation);
-          }
-          // Update circle position
-          if (circleRef.current) {
-            circleRef.current.setLatLng([newLat, newLon]);
-          }
-        });
-      }
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        if (!mapRef.current || mapInstanceRef.current) {
+          setLoading(false);
+          return;
+        }
 
-      setLoading(false);
+        try {
+          // Initialize map
+          const map = L.map(mapRef.current, {
+            center: [location.lat, location.lon],
+            zoom: 11,
+            zoomControl: !readOnly,
+          });
+
+          // Add OpenStreetMap tiles with error handling
+          const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19,
+            errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+          });
+
+          tileLayer.on('tileerror', (error) => {
+            console.warn('Tile loading error:', error);
+          });
+
+          tileLayer.addTo(map);
+
+          mapInstanceRef.current = map;
+
+          // Add marker for professional location
+          const marker = L.marker([location.lat, location.lon], {
+            draggable: !readOnly,
+          }).addTo(map);
+
+          markerRef.current = marker;
+
+          // Add circle for service radius
+          if (showRadius) {
+            const circle = L.circle([location.lat, location.lon], {
+              radius: radius * 1000, // Convert km to meters
+              color: '#3b82f6',
+              fillColor: '#3b82f6',
+              fillOpacity: 0.2,
+              weight: 2,
+            }).addTo(map);
+
+            circleRef.current = circle;
+          }
+
+          // Handle marker drag (if not read-only)
+          if (!readOnly) {
+            marker.on('dragend', (e) => {
+              const newLat = e.target.getLatLng().lat;
+              const newLon = e.target.getLatLng().lng;
+              const newLocation = { ...location, lat: newLat, lon: newLon };
+              setLocation(newLocation);
+              if (onLocationChange) {
+                onLocationChange(newLocation);
+              }
+              // Update circle position
+              if (circleRef.current) {
+                circleRef.current.setLatLng([newLat, newLon]);
+              }
+            });
+          }
+
+          // Wait for map to be ready
+          map.whenReady(() => {
+            setLoading(false);
+          });
+        } catch (error) {
+          console.error('Error initializing map:', error);
+          showError('Failed to initialize map.');
+          setLoading(false);
+        }
+      }, 100);
     } catch (error) {
-      console.error('Error initializing map:', error);
+      console.error('Error in map initialization effect:', error);
       showError('Failed to initialize map.');
       setLoading(false);
     }
-  }, [mapLoaded, location.lat, location.lon, readOnly, showRadius, radius, onLocationChange]);
+  }, [mapLoaded, readOnly, showRadius, radius, onLocationChange, showError]);
 
   // Update circle radius when radius changes
   useEffect(() => {
