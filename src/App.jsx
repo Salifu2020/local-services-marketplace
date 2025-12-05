@@ -24,6 +24,9 @@ import { getReferralCodeFromURL, processReferralCode } from './utils/referral';
 import LanguageSelector from './components/LanguageSelector';
 import ThemeToggle from './components/ThemeToggle';
 import { useTranslation } from 'react-i18next';
+import RouteGuard from './components/RouteGuard';
+import { getUserRole, canAccessProfessionalFeatures } from './utils/roles';
+import { isCurrentUserAdmin } from './utils/admin';
 
 // Lazy load route components for code splitting
 const ProOnboarding = lazy(() => import('./ProOnboarding'));
@@ -99,7 +102,37 @@ function Navigation() {
   const isOnboarding = location.pathname === '/pro-onboarding';
   const { favorites } = useFavorites();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isProfessional, setIsProfessional] = useState(false);
   const { t } = useTranslation();
+
+  useEffect(() => {
+    const checkRole = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setUserRole(null);
+        setIsAdmin(false);
+        setIsProfessional(false);
+        return;
+      }
+
+      // Check admin status
+      const adminStatus = await isCurrentUserAdmin();
+      setIsAdmin(adminStatus);
+
+      // Get user role
+      const role = await getUserRole();
+      setUserRole(role);
+      setIsProfessional(role === 'professional' || role === 'admin');
+    };
+
+    checkRole();
+    
+    // Re-check when auth state changes
+    const unsubscribe = onAuthStateChanged(auth, checkRole);
+    return () => unsubscribe();
+  }, []);
 
   if (isOnboarding) {
     return null; // Don't show nav on onboarding page
@@ -159,18 +192,24 @@ function Navigation() {
             >
               {t('nav.myProfile')}
             </Link>
-            <Link
-              to="/pro-dashboard"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
-            >
-              {t('nav.proDashboard')}
-            </Link>
-            <Link
-              to="/admin-dashboard"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
-            >
-              {t('nav.adminDashboard')}
-            </Link>
+            {/* Only show Pro Dashboard link to professionals and admins */}
+            {isProfessional && (
+              <Link
+                to="/pro-dashboard"
+                className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
+              >
+                {t('nav.proDashboard')}
+              </Link>
+            )}
+            {/* Only show Admin Dashboard link to admins */}
+            {isAdmin && (
+              <Link
+                to="/admin-dashboard"
+                className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
+              >
+                {t('nav.adminDashboard')}
+              </Link>
+            )}
             <NotificationBell />
             {auth.currentUser && !auth.currentUser.isAnonymous ? (
               <button
@@ -203,12 +242,15 @@ function Navigation() {
                 </Link>
               </>
             )}
-            <Link
-              to="/pro-onboarding"
-              className="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              Become a Pro
-            </Link>
+            {/* Only show "Become a Pro" to customers */}
+            {userRole === 'customer' && (
+              <Link
+                to="/pro-onboarding"
+                className="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                Become a Pro
+              </Link>
+            )}
           </div>
 
           {/* Mobile: Theme Toggle + Notification Bell + Hamburger */}
@@ -286,27 +328,36 @@ function Navigation() {
               >
                 {t('nav.myProfile')}
               </Link>
-              <Link
-                to="/pro-dashboard"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
-              >
-                {t('nav.proDashboard')}
-              </Link>
-              <Link
-                to="/admin-dashboard"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
-              >
-                {t('nav.adminDashboard')}
-              </Link>
-              <Link
-                to="/pro-onboarding"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-md text-base font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
-              >
-                {t('onboarding.title')}
-              </Link>
+              {/* Only show Pro Dashboard link to professionals and admins */}
+              {isProfessional && (
+                <Link
+                  to="/pro-dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+                >
+                  {t('nav.proDashboard')}
+                </Link>
+              )}
+              {/* Only show Admin Dashboard link to admins */}
+              {isAdmin && (
+                <Link
+                  to="/admin-dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+                >
+                  {t('nav.adminDashboard')}
+                </Link>
+              )}
+              {/* Only show "Become a Pro" to customers */}
+              {userRole === 'customer' && (
+                <Link
+                  to="/pro-onboarding"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors mt-2"
+                >
+                  {t('onboarding.title')}
+                </Link>
+              )}
               <div className="mt-4 pt-4 border-t border-amber-700 dark:border-amber-600 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-white dark:text-slate-200 text-sm font-medium">{t('theme.title')}</span>
@@ -1244,9 +1295,11 @@ function App() {
                 <Route 
                   path="/pro-dashboard" 
                   element={
-                    <Suspense fallback={<RouteLoading message="Loading dashboard..." />}>
-                      <ProDashboard />
-                    </Suspense>
+                    <RouteGuard allowedRoles={['professional', 'admin']} redirectTo="/">
+                      <Suspense fallback={<RouteLoading message="Loading dashboard..." />}>
+                        <ProDashboard />
+                      </Suspense>
+                    </RouteGuard>
                   } 
                 />
                 <Route 
@@ -1300,9 +1353,11 @@ function App() {
                 <Route
                   path="/admin-dashboard" 
                   element={
-                    <Suspense fallback={<RouteLoading message="Loading admin dashboard..." />}>
-                      <AdminDashboard />
-                    </Suspense>
+                    <RouteGuard allowedRoles={['admin']} redirectTo="/">
+                      <Suspense fallback={<RouteLoading message="Loading admin dashboard..." />}>
+                        <AdminDashboard />
+                      </Suspense>
+                    </RouteGuard>
                   }
                 />
                 <Route

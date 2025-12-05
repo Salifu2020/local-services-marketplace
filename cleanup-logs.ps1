@@ -18,3 +18,4 @@ foreach ($file in $files) {
 Write-Host "`nTotal console.log statements found: $((Get-ChildItem -Path src -Recurse -Include *.js,*.jsx | Select-String -Pattern 'console\.log').Count)" -ForegroundColor Yellow
 Write-Host "`nNote: Review each file and remove console.log statements manually or use find/replace in your IDE." -ForegroundColor Magenta
 
+

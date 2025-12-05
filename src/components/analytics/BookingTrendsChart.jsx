@@ -62,3 +62,4 @@ function BookingTrendsChart({ data, period = 'week' }) {
 
 export default BookingTrendsChart;
 
+

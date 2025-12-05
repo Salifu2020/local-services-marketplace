@@ -291,12 +291,26 @@ function ProOnboarding() {
         }
       }
 
+      // Update user role to professional
+      const userDocRef = doc(
+        db,
+        'artifacts',
+        appId,
+        'public',
+        'data',
+        'users',
+        userId
+      );
+      
       // Save to Firestore with shorter timeout and better error handling
       const startTime = Date.now();
       
       try {
-        // Try the save with a 5 second timeout
-        const savePromise = setDoc(professionalRef, professionalData, { merge: true });
+        // Save professional profile and update user role in parallel
+        const savePromise = Promise.all([
+          setDoc(professionalRef, professionalData, { merge: true }),
+          setDoc(userDocRef, { role: 'professional' }, { merge: true })
+        ]);
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('TIMEOUT: Save operation timed out. This usually means Firestore security rules are blocking the write. Check browser console and Firestore rules.')), 5000)
         );

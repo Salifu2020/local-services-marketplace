@@ -239,3 +239,4 @@ function MultiAreaManager({ areas = [], onAreasChange }) {
 
 export default MultiAreaManager;
 
+
