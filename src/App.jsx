@@ -2,7 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { auth, db, appId } from './firebase';
 import './i18n/config'; // Initialize i18n
-import { signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { signInAnonymously, signInWithCustomToken, signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { ToastProvider } from './context/ToastContext';
 import { LoadingProvider } from './context/LoadingContext';
@@ -37,6 +37,8 @@ const MyFavorites = lazy(() => import('./pages/MyFavorites'));
 const MyProfile = lazy(() => import('./pages/MyProfile'));
 const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignUpPage = lazy(() => import('./pages/SignUpPage'));
 const AdminDisputeDashboard = lazy(() => import('./pages/AdminDisputeDashboard'));
 const MyDisputes = lazy(() => import('./pages/MyDisputes'));
 
@@ -170,6 +172,37 @@ function Navigation() {
               {t('nav.adminDashboard')}
             </Link>
             <NotificationBell />
+            {auth.currentUser && !auth.currentUser.isAnonymous ? (
+              <button
+                onClick={async () => {
+                  try {
+                    await signOut(auth);
+                    // After sign out, sign in anonymously as guest
+                    await signInAnonymously(auth);
+                  } catch (error) {
+                    console.error('Sign out error:', error);
+                  }
+                }}
+                className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
+              >
+                Sign Out
+              </button>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/signup"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                >
+                  Sign Up
+                </Link>
+              </>
+            )}
             <Link
               to="/pro-onboarding"
               className="px-3 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
@@ -1276,6 +1309,22 @@ function App() {
                   element={
                     <Suspense fallback={<RouteLoading message="Loading admin dashboard..." />}>
                       <AdminDashboard />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/login"
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading login..." />}>
+                      <LoginPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/signup"
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading sign up..." />}>
+                      <SignUpPage />
                     </Suspense>
                   }
                 />
