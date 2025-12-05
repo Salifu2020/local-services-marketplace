@@ -1126,35 +1126,11 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    // Initialize authentication
-    const initializeAuth = async () => {
-      try {
-        // Check for initial auth token from window
-        const initialAuthToken = window.__initial_auth_token;
-        
-        if (initialAuthToken) {
-          // Sign in with custom token if provided
-          try {
-            await signInWithCustomToken(auth, initialAuthToken);
-          } catch (error) {
-            console.error('Custom token sign-in failed:', error);
-            // Fall back to anonymous sign-in
-            await signInAnonymously(auth);
-          }
-        } else {
-          // Sign in anonymously if no token provided
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error('Authentication error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     // Set up auth state listener
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       setUser(currentUser);
+      setLoading(false);
+      
       if (currentUser) {
         // Set user context in Sentry for error tracking
         setSentryUser(currentUser);
@@ -1175,11 +1151,28 @@ function App() {
       } else {
         // Clear user context when logged out
         setSentryUser(null);
+        
+        // If no user is signed in and no custom token, sign in anonymously (guest mode)
+        // This allows guests to use the app without creating an account
+        const initialAuthToken = window.__initial_auth_token;
+        
+        if (initialAuthToken) {
+          // Sign in with custom token if provided
+          signInWithCustomToken(auth, initialAuthToken).catch((error) => {
+            console.error('Custom token sign-in failed:', error);
+            // Fall back to anonymous sign-in
+            signInAnonymously(auth).catch((err) => {
+              console.error('Anonymous sign-in failed:', err);
+            });
+          });
+        } else {
+          // Sign in anonymously if no token provided (guest mode)
+          signInAnonymously(auth).catch((err) => {
+            console.error('Anonymous sign-in failed:', err);
+          });
+        }
       }
     });
-
-    // Initialize auth
-    initializeAuth();
 
     // Cleanup listener on unmount
     return () => unsubscribe();
