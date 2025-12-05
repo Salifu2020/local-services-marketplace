@@ -34,6 +34,7 @@ function ProDashboard() {
   const [error, setError] = useState(null);
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
   const [selectedBookingForDocuments, setSelectedBookingForDocuments] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Analytics state
   const [professionalData, setProfessionalData] = useState(null);
@@ -115,6 +116,21 @@ function ProDashboard() {
       unsubscribe();
     };
   }, [navigate]);
+
+  // Check admin status
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      try {
+        const adminStatus = await isCurrentUserAdmin();
+        setIsAdmin(adminStatus);
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+  }, []);
 
   const handleConfirmBooking = async (bookingId) => {
     const user = auth.currentUser;
