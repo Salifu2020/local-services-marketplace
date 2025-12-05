@@ -11,6 +11,7 @@ import { isCurrentUserAdmin, getAdminUserId, setCurrentUserAsAdmin } from '../ut
 function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Analytics data
   const [usersCount, setUsersCount] = useState(0);
