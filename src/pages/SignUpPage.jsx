@@ -141,6 +141,9 @@ function SignUpPage() {
           case 'auth/cancelled-popup-request':
             errorMessage = 'Only one popup request is allowed at a time.';
             break;
+          case 'auth/operation-not-allowed':
+            errorMessage = 'Google sign-in is not enabled. Please contact support or use email/password sign-up.';
+            break;
           default:
             errorMessage += error.message;
         }
