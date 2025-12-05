@@ -158,7 +158,7 @@ function AdminDashboard() {
               Current User ID: <span className="font-mono">{user?.uid || 'Not authenticated'}</span>
             </p>
             <p className="text-sm text-gray-500 mb-4">
-              Required Admin ID: <span className="font-mono">{getAdminUserId()}</span>
+              To become admin, go to Professional Dashboard and click "Set Me as Admin"
             </p>
             <div className="space-y-3">
               <Link
@@ -167,6 +167,22 @@ function AdminDashboard() {
               >
                 Go to Professional Dashboard (Set Admin)
               </Link>
+              <button
+                onClick={async () => {
+                  try {
+                    const { setCurrentUserAsAdmin } = await import('../utils/admin');
+                    await setCurrentUserAsAdmin();
+                    alert('Admin status set! Refreshing page...');
+                    window.location.reload();
+                  } catch (error) {
+                    console.error('Error setting admin:', error);
+                    alert('Error setting admin. Please try going to Professional Dashboard.');
+                  }
+                }}
+                className="inline-block bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium w-full"
+              >
+                Set Me as Admin Now
+              </button>
               <Link
                 to="/"
                 className="inline-block bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium w-full"
