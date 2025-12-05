@@ -6,16 +6,7 @@ import { Skeleton } from '../components/Skeleton';
 import VerificationManager from '../components/admin/VerificationManager';
 import ProfessionalManager from '../components/admin/ProfessionalManager';
 
-// Admin user ID - can be set via localStorage or environment variable
-const getAdminUserId = () => {
-  // Check localStorage first (allows dynamic admin assignment)
-  const storedAdminId = localStorage.getItem('adminUserId');
-  if (storedAdminId) {
-    return storedAdminId;
-  }
-  // Fallback to environment variable
-  return import.meta.env.VITE_ADMIN_USER_ID || 'admin-123';
-};
+import { isCurrentUserAdmin, getAdminUserId, setCurrentUserAsAdmin } from '../utils/admin';
 
 function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -35,14 +26,22 @@ function AdminDashboard() {
   useEffect(() => {
     const user = auth.currentUser;
     
-    // Access control: Check if user is admin
-    if (!user || user.uid !== getAdminUserId()) {
+    // Check if user is admin
+    if (!user) {
       setLoading(false);
       return;
     }
 
-    // Fetch analytics data
-    const fetchAnalytics = async () => {
+    // Check admin status
+    isCurrentUserAdmin().then((adminStatus) => {
+      setIsAdmin(adminStatus);
+      if (!adminStatus) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch analytics data
+      const fetchAnalytics = async () => {
       try {
         setLoading(true);
         setError(null);
@@ -120,11 +119,11 @@ function AdminDashboard() {
       }
     };
 
-    fetchAnalytics();
+      fetchAnalytics();
+    });
   }, []);
 
   const user = auth.currentUser;
-  const isAdmin = user && user.uid === getAdminUserId();
 
   // Access Denied Screen
   if (!isAdmin) {

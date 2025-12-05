@@ -23,17 +23,7 @@ import {
   fetchProfessionalReviews,
 } from '../utils/analytics';
 
-// Admin user ID - can be set via localStorage or environment variable
-// To become admin: Open browser console and run: localStorage.setItem('adminUserId', 'YOUR_USER_ID')
-const getAdminUserId = () => {
-  // Check localStorage first (allows dynamic admin assignment)
-  const storedAdminId = localStorage.getItem('adminUserId');
-  if (storedAdminId) {
-    return storedAdminId;
-  }
-  // Fallback to environment variable
-  return import.meta.env.VITE_ADMIN_USER_ID || 'admin-123';
-};
+import { isCurrentUserAdmin, getAdminUserId, setCurrentUserAsAdmin } from '../utils/admin';
 
 function ProDashboard() {
   const navigate = useNavigate();
@@ -703,7 +693,7 @@ function ProDashboard() {
         )}
 
         {/* Admin Section - Professional Management */}
-        {auth.currentUser && auth.currentUser.uid === getAdminUserId() && (
+        {isAdmin && (
           <div className="mt-8">
             <ProfessionalManager />
           </div>
@@ -726,42 +716,18 @@ function ProDashboard() {
             <button
               onClick={async () => {
                 try {
-                  // Save to localStorage for client-side checks
-                  localStorage.setItem('adminUserId', auth.currentUser.uid);
-                  
-                  // Also save admin status to Firestore user document
-                  const { doc, setDoc } = await import('firebase/firestore');
-                  const userDocRef = doc(
-                    db,
-                    'artifacts',
-                    appId,
-                    'public',
-                    'data',
-                    'users',
-                    auth.currentUser.uid
-                  );
-                  await setDoc(
-                    userDocRef,
-                    { 
-                      isAdmin: true, 
-                      adminSince: new Date().toISOString(),
-                      userId: auth.currentUser.uid // Ensure userId is set
-                    },
-                    { merge: true }
-                  );
-                  
-                  console.log('Admin status saved to Firestore:', {
-                    userId: auth.currentUser.uid,
-                    userDocPath: `artifacts/${appId}/public/data/users/${auth.currentUser.uid}`
+                  await withLoading(async () => {
+                    await setCurrentUserAsAdmin();
+                    setIsAdmin(true);
+                    showSuccess('You are now set as admin! You can now access admin features.');
+                    // Refresh after a short delay to ensure Firestore rules are updated
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 1000);
                   });
-                  
-                  alert('You are now set as admin! Please wait a few seconds for Firestore rules to update, then refresh the page.');
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 2000);
                 } catch (error) {
                   console.error('Error setting admin:', error);
-                  alert('Error setting admin status. Please try again.');
+                  showError('Error setting admin status. Please try again.');
                 }
               }}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
