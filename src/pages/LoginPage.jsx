@@ -5,6 +5,7 @@ import { auth } from '../firebase';
 import { signInWithGoogle } from '../utils/auth';
 import { useToast } from '../context/ToastContext';
 import { useLoading } from '../context/LoadingContext';
+import { getUserRole } from '../utils/roles';
 import Logo from '../components/Logo';
 
 function LoginPage() {
@@ -27,7 +28,16 @@ function LoginPage() {
       try {
         await signInWithEmailAndPassword(auth, email, password);
         showSuccess('Logged in successfully!');
-        navigate('/');
+        
+        // Redirect based on user role
+        const role = await getUserRole();
+        if (role === 'professional') {
+          navigate('/pro-dashboard');
+        } else if (role === 'admin') {
+          navigate('/admin-dashboard');
+        } else {
+          navigate('/dashboard');
+        }
       } catch (error) {
         console.error('Login error:', error);
         let errorMessage = 'Failed to log in. ';
@@ -62,7 +72,16 @@ function LoginPage() {
       try {
         await signInWithGoogle();
         showSuccess('Signed in with Google successfully!');
-        navigate('/');
+        
+        // Redirect based on user role
+        const role = await getUserRole();
+        if (role === 'professional') {
+          navigate('/pro-dashboard');
+        } else if (role === 'admin') {
+          navigate('/admin-dashboard');
+        } else {
+          navigate('/dashboard');
+        }
       } catch (error) {
         console.error('Google login error:', error);
         let errorMessage = 'Failed to sign in with Google. ';

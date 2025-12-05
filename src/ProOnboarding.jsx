@@ -400,8 +400,8 @@ function ProOnboarding() {
     // If we're on step 5 (availability), just redirect (availability auto-saves)
     if (currentStep === 5) {
       // Availability is already saved via the AvailabilitySchedule component
-      // Just redirect to home
-      navigate('/');
+      // Redirect to professional dashboard
+      navigate('/pro-dashboard');
       return;
     }
   };

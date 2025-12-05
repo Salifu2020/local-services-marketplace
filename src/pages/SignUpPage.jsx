@@ -17,6 +17,7 @@ function SignUpPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    userType: '', // 'customer' or 'professional'
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -44,6 +45,10 @@ function SignUpPage() {
 
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (!formData.userType) {
+      newErrors.userType = 'Please select whether you are a customer or professional';
     }
 
     setErrors(newErrors);
@@ -84,17 +89,25 @@ function SignUpPage() {
           user.uid
         );
 
+        const userRole = formData.userType; // 'customer' or 'professional'
+        
         await setDoc(userDocRef, {
           userId: user.uid,
           email: formData.email,
           name: formData.name.trim(),
           displayName: formData.name.trim(),
           createdAt: new Date().toISOString(),
-          role: 'customer', // Default role
+          role: userRole,
         });
 
         showSuccess('Account created successfully!');
-        navigate('/');
+        
+        // Redirect based on user type
+        if (userRole === 'professional') {
+          navigate('/pro-onboarding');
+        } else {
+          navigate('/dashboard');
+        }
       } catch (error) {
         console.error('Sign up error:', error);
         let errorMessage = 'Failed to create account. ';
@@ -122,11 +135,47 @@ function SignUpPage() {
   };
 
   const handleGoogleSignUp = async () => {
+    // Check if user type is selected
+    if (!formData.userType) {
+      showError('Please select whether you are a customer or professional');
+      return;
+    }
+
     await withLoading(async () => {
       try {
-        await signInWithGoogle();
+        const user = await signInWithGoogle();
+        
+        // Update user role in Firestore
+        const { doc, setDoc, getDoc } = await import('firebase/firestore');
+        const userDocRef = doc(
+          db,
+          'artifacts',
+          appId,
+          'public',
+          'data',
+          'users',
+          user.uid
+        );
+        
+        // Check if user document exists
+        const userDoc = await getDoc(userDocRef);
+        const userRole = formData.userType;
+        
+        if (!userDoc.exists() || !userDoc.data().role) {
+          // Set role for new users or users without a role
+          await setDoc(userDocRef, {
+            role: userRole,
+          }, { merge: true });
+        }
+        
         showSuccess('Account created with Google successfully!');
-        navigate('/');
+        
+        // Redirect based on user type
+        if (userRole === 'professional') {
+          navigate('/pro-onboarding');
+        } else {
+          navigate('/dashboard');
+        }
       } catch (error) {
         console.error('Google sign-up error:', error);
         let errorMessage = 'Failed to sign up with Google. ';
@@ -281,6 +330,53 @@ function SignUpPage() {
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">
                   {errors.confirmPassword}
                 </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
+                I am a... <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, userType: 'customer' }));
+                    if (errors.userType) {
+                      setErrors(prev => ({ ...prev, userType: '' }));
+                    }
+                  }}
+                  className={`px-4 py-4 border-2 rounded-lg text-center transition-all ${
+                    formData.userType === 'customer'
+                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                      : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 hover:border-gray-400 dark:hover:border-slate-500'
+                  } ${errors.userType ? 'border-red-500 dark:border-red-500' : ''}`}
+                >
+                  <div className="text-2xl mb-2">👤</div>
+                  <div className="font-medium">Customer</div>
+                  <div className="text-xs mt-1 opacity-75">I want to hire professionals</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, userType: 'professional' }));
+                    if (errors.userType) {
+                      setErrors(prev => ({ ...prev, userType: '' }));
+                    }
+                  }}
+                  className={`px-4 py-4 border-2 rounded-lg text-center transition-all ${
+                    formData.userType === 'professional'
+                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                      : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 hover:border-gray-400 dark:hover:border-slate-500'
+                  } ${errors.userType ? 'border-red-500 dark:border-red-500' : ''}`}
+                >
+                  <div className="text-2xl mb-2">🔧</div>
+                  <div className="font-medium">Professional</div>
+                  <div className="text-xs mt-1 opacity-75">I provide services</div>
+                </button>
+              </div>
+              {errors.userType && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.userType}</p>
               )}
             </div>
 
