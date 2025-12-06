@@ -44,6 +44,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignUpPage = lazy(() => import('./pages/SignUpPage'));
 const AdminDisputeDashboard = lazy(() => import('./pages/AdminDisputeDashboard'));
 const MyDisputes = lazy(() => import('./pages/MyDisputes'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -192,6 +193,12 @@ function Navigation() {
             >
               {t('nav.myProfile')}
             </Link>
+            <Link
+              to="/about"
+              className="px-3 py-2 rounded-md text-sm font-medium text-white dark:text-slate-200 hover:text-amber-100 dark:hover:text-white hover:bg-amber-900 dark:hover:bg-slate-700 transition-colors"
+            >
+              About
+            </Link>
             {/* Only show Pro Dashboard link to professionals and admins */}
             {isProfessional && (
               <Link
@@ -327,6 +334,13 @@ function Navigation() {
                 className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
               >
                 {t('nav.myProfile')}
+              </Link>
+              <Link
+                to="/about"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:text-amber-100 hover:bg-amber-900 transition-colors"
+              >
+                About
               </Link>
               {/* Only show Pro Dashboard link to professionals and admins */}
               {isProfessional && (
@@ -1389,6 +1403,14 @@ function App() {
                   element={
                     <Suspense fallback={<RouteLoading message="Loading disputes..." />}>
                       <MyDisputes />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/about"
+                  element={
+                    <Suspense fallback={<RouteLoading message="Loading about page..." />}>
+                      <AboutPage />
                     </Suspense>
                   }
                 />
